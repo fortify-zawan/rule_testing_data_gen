@@ -31,6 +31,7 @@ def _window_days(w: str | None) -> int | None:
 
 def _format_derived_conditions(rule: Rule, scenario_type: str, aggregates: dict | None = None) -> str:
     """Serialize derived-condition DA details + concrete shortfall arithmetic into corrector prompt context."""
+    from datetime import timedelta
     parts = []
     for cond in rule.conditions:
         if not cond.derived_attributes:
@@ -119,11 +120,18 @@ def _format_derived_conditions(rule: Rule, scenario_type: str, aggregates: dict 
                         else:
                             d0_label = f"RECENT {d0}d"
                             if da0.aggregation == "sum":
-                                parts.append(f"  → Add or increase filter-matching ({flt0}) transactions in the {d0_label} period to cover this shortfall.")
-                                parts.append(f"  → Do NOT add filter-matching transactions to the PRIOR period — that raises the denominator and worsens the ratio.")
+                                parts.append(f"  MANDATORY: You MUST add filter-matching ({flt0}) transactions to the {d0_label} period — the numerator ({da0.name}) must be > 0.")
+                                parts.append(f"  → Primary repair: Add or increase filter-matching ({flt0}) transactions in the {d0_label} period to cover the shortfall above.")
+                                parts.append(f"  → Optional lever: You may also reduce or remove EXISTING filter-matching ({flt1}) transactions in the PRIOR {d1}d period — this lowers the denominator and reduces how much you need to add to the recent period.")
+                                parts.append(f"  → Do NOT add NEW filter-matching transactions to the PRIOR period — that raises the denominator and worsens the ratio.")
+                                parts.append(f"  → Reducing the prior period alone is NOT sufficient — you must have filter-matching ({flt0}) transactions in the recent period for all related conditions to pass.")
                             elif da0.aggregation == "count":
                                 needed_count = int(required_da0) + 1 - int(da0_current)
-                                parts.append(f"  → Add at least {needed_count} more filter-matching ({flt0}) transactions dated within the {d0_label} period.")
+                                parts.append(f"  MANDATORY: You MUST add filter-matching ({flt0}) transactions to the {d0_label} period — the numerator ({da0.name}) must be > 0.")
+                                parts.append(f"  → Primary repair: Add at least {needed_count} more filter-matching ({flt0}) transactions dated within the {d0_label} period.")
+                                parts.append(f"  → Optional lever: You may also reduce or remove EXISTING filter-matching ({flt1}) transactions in the PRIOR {d1}d period — fewer prior-period matches lowers the denominator.")
+                                parts.append(f"  → Do NOT add NEW filter-matching transactions to the PRIOR period — that raises the denominator and worsens the ratio.")
+                                parts.append(f"  → Reducing the prior period alone is NOT sufficient — you must have filter-matching ({flt0}) transactions in the recent period for all related conditions to pass.")
                     else:
                         allowed_da0 = float(cond.value) * float(da1_current)
                         excess = float(da0_current) - allowed_da0
@@ -142,8 +150,11 @@ def _format_derived_conditions(rule: Rule, scenario_type: str, aggregates: dict 
                     if window_mode == "independent":
                         parts.append(f"  → Add or increase filter-matching ({flt0}) transactions within the {da0.window} window.")
                     else:
-                        parts.append(f"  → Add or increase filter-matching ({flt0}) transactions in the RECENT {d0}d period.")
-                        parts.append(f"  → Do NOT add filter-matching transactions to the PRIOR period.")
+                        parts.append(f"  MANDATORY: You MUST add filter-matching ({flt0}) transactions to the RECENT {d0}d period — the numerator must be > 0.")
+                        parts.append(f"  → Primary repair: Add or increase filter-matching ({flt0}) transactions in the RECENT {d0}d period.")
+                        parts.append(f"  → Optional lever: You may also reduce or remove EXISTING filter-matching ({flt1}) transactions in the PRIOR {d1}d period — this lowers the denominator and improves the ratio.")
+                        parts.append(f"  → Do NOT add NEW filter-matching transactions to the PRIOR period — that raises the denominator and worsens the ratio.")
+                        parts.append(f"  → Reducing the prior period alone is NOT sufficient — you must have transactions in the recent period for all related conditions to pass.")
                 else:
                     parts.append(f"REPAIR GUIDANCE (genuine must not fire):")
                     parts.append(f"  {da0.name} must be ≤ {cond.value} × {da1.name}")
@@ -263,12 +274,15 @@ Failed conditions (what must change):
 Before modifying any transaction:
 1. Read the VALIDATION RESULTS above. Identify which transactions are MOTIF transactions
    (those matching the rule's filter) and which are BACKGROUND.
-2. Read the REPAIR GUIDANCE above (if present). Use the shortfall arithmetic to determine
+2. Identify the LAST transaction in the sequence (most recent date) — this is the anchor.
+   All time windows are measured backwards from that date (latest_date). A "recent 7d" window
+   means transactions dated within 7 days BEFORE the last transaction's date.
+3. Read the REPAIR GUIDANCE above (if present). Use the shortfall arithmetic to determine
    exactly how much needs to change and in which time window.
-3. Plan the minimum changes needed — adjust amounts or dates of existing motif transactions
+4. Plan the minimum changes needed — adjust amounts or dates of existing motif transactions
    before adding new ones. Only add new motif transactions if the shortfall cannot be covered
    by adjusting what already exists.
-4. Verify in your head that the planned changes satisfy the condition(s) after repair.
+5. Verify in your head that the planned changes satisfy the condition(s) after repair.
    Do not proceed until your plan adds up.
 
 --- SECTION B — Preservation constraint (mandatory) ---

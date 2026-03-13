@@ -116,9 +116,11 @@ Think step by step:
    crossed (risky) or stayed below (genuine).
 2. For each aggregate condition, decide on concrete target values — how many transactions,
    of what approximate sizes, are needed in the motif layer to satisfy or avoid the condition?
-3. If the rule compares two aggregates from different time windows (e.g. recent vs prior period),
-   make sure the transactions that count toward each aggregate fall in the correct window.
-   Do NOT mix up which filter-matching transactions go in which period.
+3. If the rule compares two aggregates from different time windows (e.g. recent 7d vs prior 30d),
+   remember that all windows are anchored at the date of the LAST transaction you generate.
+   Plan the final background transaction date first, then place filter-matching motif transactions
+   within the correct window relative to that anchor date. Do NOT mix up which transactions go
+   in which window — a "recent 7d" transaction must be within 7 days of the last transaction.
 4. What does a realistic background for this account type look like?
 The rule fires on AGGREGATES — individual transactions should reflect real account history,
 not a direct demonstration of the rule.
@@ -158,6 +160,12 @@ Order transactions by date with realistic spacing:
   length and place motif transactions in the correct window for each.
 - Background transactions can extend freely across the full timeline.
 - The LAST transaction in the sequence (most recent date) MUST be a background transaction.
+  IMPORTANT — window anchoring: all time windows are measured backwards from the date of
+  that final background transaction (latest_date). If the rule has a "recent 7d" window,
+  your filter-matching motif transactions for that window must be dated within 7 days BEFORE
+  the final background transaction — not 7 days before today or some other reference point.
+  Decide the final background transaction date FIRST, then work backwards to place motif
+  transactions in the correct windows relative to that date.
 
 --- Hard requirements ---
 - Generate 10-20 transactions total. Use more transactions if the rule's windows are long
