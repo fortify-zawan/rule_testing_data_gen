@@ -1,0 +1,231 @@
+# AML Rule Tester — Canonical Attribute Schema
+# =============================================
+# This file is the single source of truth for attribute names used across:
+#   - LLM prompts (rule parser, sequence generator)
+#   - Validation engine (aggregate computation, rule evaluation)
+#
+# All LLMs are instructed to use ONLY the canonical names defined here.
+# types:
+#   numeric     — can be summed, averaged, compared with >, <, >= etc.
+#   categorical — compared with ==, !=, in, not_in
+#   datetime    — ISO 8601 string, used for window filtering
+#   boolean     — true/false
+
+# ── Transaction attributes ────────────────────────────────────────────────────
+# These are the attributes present on each individual transaction record.
+
+transaction_attributes:
+  send_amount:
+    type: numeric
+    description: Amount sent by the user in the send currency
+    aliases: [amount, sent_amount, transaction_amount, transfer_amount]
+
+  send_currency:
+    type: categorical
+    description: ISO 4217 currency code of the sent amount (e.g. USD, GBP)
+    aliases: [currency, send_ccy, from_currency]
+
+  receive_amount:
+    type: numeric
+    description: Amount received by the recipient in the receive currency
+    aliases: [received_amount, payout_amount]
+
+  receive_currency:
+    type: categorical
+    description: ISO 4217 currency code of the received amount
+    aliases: [receive_ccy, to_currency]
+
+  send_country_code:
+    type: categorical
+    description: Country of the sender — use full country name (e.g. "United Kingdom", "United States")
+    aliases: [send_country, from_country, origin_country, sender_country]
+
+  receive_country_code:
+    type: categorical
+    description: Country of the recipient — use full country name exactly as stated in the rule (e.g. "Iran", "North Korea")
+    aliases: [receive_country, to_country, destination_country, recipient_country, beneficiary_country, country]
+
+  payin_method:
+    type: categorical
+    description: How the sender funded the transaction (e.g. bank_transfer, card, wallet)
+    aliases: [payment_method, funding_method, pay_in_method]
+
+  payout_method:
+    type: categorical
+    description: How the recipient receives funds (e.g. bank_deposit, cash_pickup, mobile_wallet)
+    aliases: [disbursement_method, pay_out_method]
+
+  transaction_status:
+    type: categorical
+    description: Current status of the transaction (e.g. completed, pending, cancelled, refunded)
+    aliases: [status, txn_status]
+
+  payment_direction:
+    type: categorical
+    description: Direction of the transaction (outbound or inbound)
+    aliases: [direction, txn_direction]
+
+  created_at:
+    type: datetime
+    description: Timestamp when the transaction was created (ISO 8601)
+    aliases: [date, transaction_date, timestamp, txn_date]
+
+  transaction_id:
+    type: categorical
+    description: Unique identifier for the transaction
+    aliases: [txn_id, id]
+
+  user_id:
+    type: categorical
+    description: Unique identifier of the sending user
+    aliases: [sender_id, account_id]
+
+  recipient_id:
+    type: categorical
+    description: Unique identifier of the recipient
+    aliases: [receiver_id, beneficiary_id]
+
+  device_id:
+    type: categorical
+    description: Device identifier used for the transaction
+    aliases: [device]
+
+  ip_address:
+    type: categorical
+    description: IP address from which the transaction was initiated
+    aliases: [ip]
+
+  is_fraud:
+    type: boolean
+    description: Whether the transaction has been labelled as fraud
+    aliases: [fraud_flag, fraudulent]
+
+# ── User attributes ───────────────────────────────────────────────────────────
+# Attributes of the sending user (account-level, not per-transaction).
+
+user_attributes:
+  nationality_code:
+    type: categorical
+    description: Nationality of the user — use full country name (e.g. "Iranian", "British")
+    aliases: [nationality, user_nationality, user_country]
+
+  occupation:
+    type: categorical
+    description: User's stated occupation
+    aliases: [job, profession, user_occupation]
+
+  date_of_birth:
+    type: datetime
+    description: User's date of birth
+    aliases: [dob, birth_date]
+
+  is_user_blocked:
+    type: boolean
+    description: Whether the user account is currently blocked
+    aliases: [blocked, account_blocked]
+
+  transaction_count:
+    type: numeric
+    description: Total historical transaction count for the user
+    aliases: [total_transactions, txn_count]
+
+  successful_transaction_count:
+    type: numeric
+    description: Count of successful historical transactions
+    aliases: [successful_txns]
+
+  signup_send_country_code:
+    type: categorical
+    description: Country from which the user signed up to send — use full country name (e.g. "United Kingdom")
+    aliases: [signup_country, registration_country]
+
+# ── Recipient attributes ──────────────────────────────────────────────────────
+# Attributes of the recipient of a transaction.
+
+recipient_attributes:
+  bank_name:
+    type: categorical
+    description: Name of the recipient's bank
+    aliases: [bank, recipient_bank]
+
+  is_related_to_sender:
+    type: boolean
+    description: Whether the recipient is a known relation of the sender
+    aliases: [related_party, related_to_sender]
+
+  send_reason:
+    type: categorical
+    description: Stated reason for the transfer
+    aliases: [transfer_reason, reason, purpose]
+
+# ── Supported aggregations ────────────────────────────────────────────────────
+# These are the ONLY aggregation types the engine can compute.
+# The LLM must use exactly these names.
+
+aggregations:
+  sum:
+    applies_to: numeric
+    description: Total of a numeric attribute across all (or filtered) transactions
+
+  count:
+    applies_to: any
+    description: Number of transactions in the sequence (or matching a filter if filter fields are set)
+
+  average:
+    applies_to: numeric
+    description: Mean value of a numeric attribute across all (or filtered) transactions
+
+  max:
+    applies_to: numeric
+    description: Maximum value of a numeric attribute across all (or filtered) transactions
+
+  percentage_of_total:
+    applies_to: numeric
+    description: >
+      Sum of a numeric attribute for the filtered subset divided by the total for all transactions.
+      Requires filter_attribute/filter_operator/filter_value to define the subset.
+
+  ratio:
+    applies_to: numeric
+    description: >
+      Tier 1 (Pattern A) — subset ÷ complement within the same window.
+      Numerator = transactions matching filter_attribute/operator/value.
+      Denominator = all other transactions in the same window.
+      Set filter_attribute/operator/value and window. Leave derived_attributes null.
+      Example: Iran sends / non-Iran sends in last 30 days.
+      For comparing two SEPARATELY-WINDOWED quantities (e.g. last 7d vs prior 30d),
+      use a Tier 2 derived condition instead (see derived_expressions below).
+
+  distinct_count:
+    applies_to: categorical
+    description: Number of unique values of a categorical attribute across the sequence
+
+  days_since_first:
+    applies_to: datetime
+    description: >
+      Number of days between the earliest and latest transaction date in the sequence
+      (or earliest matching transaction if filter fields are set).
+      Use on created_at to measure account tenure / activity span.
+      With a filter: (latest date across all txns) - (earliest date among filtered txns).
+      Examples: days_since_first(created_at) = account age in days.
+      days_since_first(created_at, filter: receive_country_code in ["Iran"]) = days since first Iran transaction.
+
+# ── Derived expressions (Tier 2 conditions) ──────────────────────────────────
+# Used when a condition compares two SEPARATELY-WINDOWED aggregations.
+# Define derived_attributes (list of named DerivedAttr, each with its own
+# aggregation, attribute, window, filter) and derived_expression to combine them.
+# The engine uses non-overlapping semantics for "ratio":
+#   DA[0] = numerator  = [latest - DA[0].window, latest]
+#   DA[1] = denominator = [latest - DA[0].window - DA[1].window, latest - DA[0].window)
+
+derived_expressions:
+  ratio:
+    description: >
+      DA[0] / DA[1] using non-overlapping windows.
+      DA[0] = recent period (numerator), DA[1] = prior period (denominator).
+      Example: count(Iran txns last 7d) / count(Iran txns prior 30d) > 2.0
+      Timeline must span DA[0].window + DA[1].window days total.
+  difference:
+    description: >
+      DA[0] - DA[1] using independent windows (both measured from latest).
+      Example: sum(send_amount last 7d) - sum(send_amount last 30d) > 5000.

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(py\\)$\")",
+      "Bash(python -c \"from llm.sequence_generator import generate_behavioral_sequence, _format_derived_conditions; print\\(''generator OK''\\)\")",
+      "Bash(python3 -c \"from llm.sequence_generator import generate_behavioral_sequence, _format_derived_conditions; from llm.sequence_corrector import correct_behavioral_sequence, _format_derived_conditions as cf; print\\(''both OK''\\)\")",
+      "Bash(python3 -m py_compile /Users/zeeshan/Desktop/fortify/data_generator/aml_rule_scenario_gen_v25/new_rule_tester/llm/sequence_generator.py)",
+      "Bash(python3 -m py_compile /Users/zeeshan/Desktop/fortify/data_generator/aml_rule_scenario_gen_v25/new_rule_tester/llm/sequence_corrector.py)",
+      "Bash(python3 -m py_compile /Users/zeeshan/Desktop/fortify/data_generator/aml_rule_scenario_gen_v25/new_rule_tester/ui/pages/test_case_builder.py)",
+      "Bash(python -c \"from logging_config import get_logger; log = get_logger\\(''test''\\); log.info\\(''smoke test ok''\\); print\\(''import OK''\\)\")",
+      "Bash(./venv/bin/python -c \"from logging_config import get_logger; log = get_logger\\(''test''\\); log.info\\(''smoke test ok''\\); print\\(''import OK''\\)\")"
+    ]
+  }
+}
