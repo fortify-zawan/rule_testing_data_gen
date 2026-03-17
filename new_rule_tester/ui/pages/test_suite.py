@@ -5,9 +5,10 @@ Stateless: one sequence with tagged transactions.
 Behavioral: multiple test cases with aggregates.
 Export: CSV, JSON, XLSX.
 """
-import streamlit as st
 import pandas as pd
-from domain.models import Rule, Transaction, BehavioralTestCase
+import streamlit as st
+
+from domain.models import BehavioralTestCase, Rule, Transaction
 from export.exporter import export_csv, export_json, export_xlsx
 from ui.state import go_to
 

@@ -4,8 +4,10 @@ User enters a natural language AML rule. The LLM parses it into structured form.
 User can edit the parsed output before proceeding.
 """
 import streamlit as st
-from llm.rule_parser import parse_rule
+
 from domain.models import Rule, RuleCondition
+from llm.rule_parser import parse_rule
+from llm.suggestion_generator import generate_suggestions
 from ui.state import go_to
 
 
@@ -210,6 +212,11 @@ def render():
 
     st.divider()
     if st.button("Confirm and Continue", type="primary"):
+        with st.spinner("Analysing rule for edge case suggestions..."):
+            try:
+                st.session_state.suggestions = generate_suggestions(rule)
+            except Exception:
+                st.session_state.suggestions = []
         if rule.rule_type == "stateless":
             go_to("prototype_review")
         else:

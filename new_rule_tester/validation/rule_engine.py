@@ -3,9 +3,15 @@
 For stateless rules: evaluates each individual transaction.
 For behavioral rules: evaluates pre-computed aggregates.
 """
-from domain.models import Rule, RuleCondition, Transaction, ConditionResult, ValidationResult
-from validation.aggregate_compute import compute_aggregates
+from domain.models import (
+    ConditionResult,
+    Rule,
+    RuleCondition,
+    Transaction,
+    ValidationResult,
+)
 from logging_config import get_logger
+from validation.aggregate_compute import compute_aggregates
 
 log = get_logger(__name__)
 

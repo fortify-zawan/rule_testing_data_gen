@@ -1,10 +1,9 @@
 """Export a test suite to CSV, JSON, or XLSX."""
 import csv
-import json
 import io
-from dataclasses import asdict
-from domain.models import Rule, Transaction, BehavioralTestCase
+import json
 
+from domain.models import BehavioralTestCase, Rule, Transaction
 
 # ─── CSV ──────────────────────────────────────────────────────────────────────
 
@@ -137,7 +136,7 @@ def export_xlsx(
 ) -> bytes:
     try:
         import openpyxl
-        from openpyxl.styles import PatternFill, Font
+        from openpyxl.styles import Font, PatternFill
     except ImportError:
         # Fallback: return CSV bytes with xlsx extension
         return export_csv(rule, sequence, cases).encode()

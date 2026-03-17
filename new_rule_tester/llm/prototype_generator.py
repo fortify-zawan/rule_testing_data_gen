@@ -1,46 +1,12 @@
 """Generate risky + genuine prototype examples for stateless rules."""
+from domain.models import Prototype, Rule
 from llm.llm_wrapper import call_llm_json
-from domain.models import Rule, Prototype
-
-SYSTEM = """You are generating minimal transaction examples for AML rule testing.
-Output ONLY valid JSON — no explanation, no markdown fences."""
-
-PROMPT_TEMPLATE = """Generate exactly one RISKY and one GENUINE transaction example for this AML rule.
-
-Rule: {raw_expression}
-Relevant attributes: {attributes}
-High-risk countries (if applicable): {high_risk_countries}
-
-{feedback_section}
-
-Rules:
-- Only populate the relevant attributes listed above.
-- The RISKY example must satisfy ALL rule conditions (it would trigger the rule).
-- The GENUINE example must NOT satisfy the complete set of conditions (it would NOT trigger).
-- Use realistic, specific values (not placeholders).
-
-Output this exact JSON:
-{{
-  "risky": {{"attr1": value1, "attr2": value2, ...}},
-  "genuine": {{"attr1": value1, "attr2": value2, ...}}
-}}"""
-
-SINGLE_PROTO_TEMPLATE = """Generate exactly one {scenario_upper} transaction example for this AML rule.
-
-Rule: {raw_expression}
-Relevant attributes: {attributes}
-High-risk countries (if applicable): {high_risk_countries}
-
-{scenario_instruction}
-
-{feedback_section}
-
-Rules:
-- Only populate the relevant attributes listed above.
-- Use realistic, specific values (not placeholders).
-
-Output this exact JSON:
-{{"{scenario_type}": {{"attr1": value1, "attr2": value2, ...}}}}"""
+from prompts.prototype_generator import (
+    CONFLICT_SECTION_TEMPLATE,
+    PROMPT_TEMPLATE,
+    SINGLE_PROTO_TEMPLATE,
+    SYSTEM,
+)
 
 
 def generate_prototypes(
@@ -85,7 +51,7 @@ def generate_single_prototype(
     scenario_type: str,
     feedback_history: list[str] = None,
     current_attrs: dict = None,
-) -> Prototype:
+) -> tuple[Prototype, list[dict]]:
     """Generate or regenerate a single prototype (risky OR genuine) with accumulated feedback.
 
     feedback_history: all prior feedback strings accumulated across iterations.
@@ -115,6 +81,10 @@ def generate_single_prototype(
         lines = "\n".join(f"{i + 1}. {f}" for i, f in enumerate(feedback_history))
         feedback_section = f"Guidance for generation (apply all of these):\n{lines}"
 
+    conflict_section = ""
+    if feedback_history:
+        conflict_section = CONFLICT_SECTION_TEMPLATE.format(scenario_type=scenario_type)
+
     prompt = SINGLE_PROTO_TEMPLATE.format(
         scenario_upper=scenario_type.upper(),
         raw_expression=rule.raw_expression,
@@ -125,9 +95,10 @@ def generate_single_prototype(
         scenario_instruction=scenario_instruction,
         scenario_type=scenario_type,
         feedback_section=feedback_section,
-    )
+    ) + conflict_section
 
     data = call_llm_json(prompt, system=SYSTEM)
+    conflict_dicts = data.pop("feedback_conflicts", []) if isinstance(data, dict) else []
     proto = Prototype(scenario_type=scenario_type, attributes=data[scenario_type])
     proto.user_feedback_history = list(feedback_history)
-    return proto
+    return proto, conflict_dicts

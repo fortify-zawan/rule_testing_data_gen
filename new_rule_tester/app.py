@@ -3,15 +3,16 @@
 Run with:
     streamlit run app.py
 """
-import sys
 import os
+import sys
 
 # Ensure the project root is on the path so all imports resolve correctly
 sys.path.insert(0, os.path.dirname(__file__))
 
 import streamlit as st
+
+from ui.pages import prototype_review, rule_input, test_case_builder, test_suite
 from ui.state import init_state
-from ui.pages import rule_input, prototype_review, test_case_builder, test_suite
 
 st.set_page_config(
     page_title="AML Rule Tester",

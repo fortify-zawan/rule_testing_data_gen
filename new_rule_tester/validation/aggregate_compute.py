@@ -22,10 +22,11 @@ Window: if window is set on the condition (e.g. "30d", "24h"), transactions are
   first restricted to those within that window of the latest transaction date.
 """
 from __future__ import annotations
+
 from datetime import datetime, timedelta
 from typing import Any
 
-from domain.models import Rule, RuleCondition, DerivedAttr, Transaction
+from domain.models import DerivedAttr, Rule, RuleCondition, Transaction
 from logging_config import get_logger
 
 log = get_logger(__name__)

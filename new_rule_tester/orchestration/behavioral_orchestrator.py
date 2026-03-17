@@ -4,15 +4,15 @@ Coordinates:
   1. Internal generation + validation loop (Loop B) — runs silently before user sees anything.
   2. Accepts user feedback and reruns the loop (Loop C entry point).
 """
-from domain.models import Rule, Transaction, BehavioralTestCase, ValidationResult
-from llm.sequence_generator import generate_behavioral_sequence
+from domain.models import BehavioralTestCase, Rule, Transaction
 from llm.sequence_corrector import correct_behavioral_sequence
-from validation.rule_engine import evaluate_behavioral_sequence
+from llm.sequence_generator import generate_behavioral_sequence
 from logging_config import get_logger
+from validation.rule_engine import evaluate_behavioral_sequence
 
 log = get_logger(__name__)
 
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 4  # 4 validation passes = 3 real correction attempts before giving up
 
 
 # ── Realism checks (soft gates) ───────────────────────────────────────────────
@@ -120,7 +120,7 @@ def run(
     )
 
     status("Generating behavioral sequence...")
-    transactions = generate_behavioral_sequence(
+    transactions, conflict_dicts = generate_behavioral_sequence(
         rule=rule,
         scenario_type=scenario_type,
         intent=intent,
@@ -129,6 +129,14 @@ def run(
         feedback_history=prior_feedback,
     )
     log.info("orchestrator | generated %d transactions", len(transactions))
+
+    if conflict_dicts:
+        lines = ["⚠️ Note: one or more of your instructions may conflict with the rule and could be overridden by auto-correction:"]
+        for c in conflict_dicts:
+            lines.append(f"  • \"{c.get('feedback_instruction', '')}\"")
+            lines.append(f"    → {c.get('explanation', '')} (affects: {c.get('conflicting_condition', '')})")
+        status("\n".join(lines))
+        log.warning("orchestrator | feedback conflicts detected: %s", conflict_dicts)
 
     # Internal loop B
     for attempt in range(MAX_ATTEMPTS):

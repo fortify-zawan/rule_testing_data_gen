@@ -1,0 +1,44 @@
+[tool.ruff]
+# Target Python version
+target-version = "py312"
+
+# Exclude generated/vendored directories
+exclude = [
+    "venv",
+    ".venv",
+    "__pycache__",
+    "logs",
+]
+
+[tool.ruff.lint]
+# Rule sets enabled:
+#   E/W  — pycodestyle errors and warnings
+#   F    — Pyflakes (undefined names, unused imports, etc.)
+#   I    — isort (import ordering)
+#   UP   — pyupgrade (modernise syntax for Python 3.12)
+#   B    — flake8-bugbear (common bugs and design issues)
+select = ["E", "W", "F", "I", "UP", "B"]
+
+# Ignored rules:
+#   E501 — line too long (prompts/ files have intentionally long strings)
+#   B008 — do not perform function calls in default arguments (used in dataclasses)
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.isort]
+# Keep stdlib / third-party / local imports in separate groups
+known-first-party = [
+    "domain",
+    "config",
+    "llm",
+    "prompts",
+    "validation",
+    "orchestration",
+    "ui",
+    "export",
+]
+
+[tool.ruff.format]
+# Black-compatible formatting
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

@@ -8,7 +8,14 @@
       "Bash(python3 -m py_compile /Users/zeeshan/Desktop/fortify/data_generator/aml_rule_scenario_gen_v25/new_rule_tester/llm/sequence_corrector.py)",
       "Bash(python3 -m py_compile /Users/zeeshan/Desktop/fortify/data_generator/aml_rule_scenario_gen_v25/new_rule_tester/ui/pages/test_case_builder.py)",
       "Bash(python -c \"from logging_config import get_logger; log = get_logger\\(''test''\\); log.info\\(''smoke test ok''\\); print\\(''import OK''\\)\")",
-      "Bash(./venv/bin/python -c \"from logging_config import get_logger; log = get_logger\\(''test''\\); log.info\\(''smoke test ok''\\); print\\(''import OK''\\)\")"
+      "Bash(./venv/bin/python -c \"from logging_config import get_logger; log = get_logger\\(''test''\\); log.info\\(''smoke test ok''\\); print\\(''import OK''\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(python3 -c \":*)",
+      "Bash(wc -l /Users/zeeshan/Desktop/fortify/data_generator/aml_rule_scenario_gen_v33/new_rule_tester/llm/*.py /Users/zeeshan/Desktop/fortify/data_generator/aml_rule_scenario_gen_v33/new_rule_tester/prompts/*.py)",
+      "Bash(source venv/bin/activate)",
+      "Bash(pip install:*)",
+      "Bash(ruff --version)",
+      "Bash(ruff check:*)"
     ]
   }
 }

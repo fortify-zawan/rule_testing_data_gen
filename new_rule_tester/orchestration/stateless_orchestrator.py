@@ -4,11 +4,11 @@ Coordinates:
   1. Sequence generation from approved prototypes.
   2. Internal correction loop (Loop B) — no user involvement.
 """
-from domain.models import Rule, Prototype, Transaction, ValidationResult
-from llm.sequence_generator import generate_stateless_sequence
-from llm.sequence_corrector import correct_stateless_transaction
-from validation.rule_engine import evaluate_stateless_sequence
 from config.schema_loader import canonical_name, normalize_country_values
+from domain.models import Prototype, Rule, Transaction
+from llm.sequence_corrector import correct_stateless_transaction
+from llm.sequence_generator import generate_stateless_sequence
+from validation.rule_engine import evaluate_stateless_sequence
 
 
 def _canonicalize_attrs(attrs: dict, high_risk_countries: list[str] | None = None) -> dict:

@@ -1,7 +1,9 @@
 """Thin wrapper around the Anthropic SDK."""
 import json
 import time
+
 import anthropic
+
 from logging_config import get_logger
 
 log = get_logger(__name__)
@@ -38,19 +40,21 @@ def call_llm_json(
     prompt: str,
     system: str = "",
     model: str = "claude-haiku-4-5-20251001",
-    max_tokens: int = 4096,
+    max_tokens: int = 8192,
 ) -> dict:
-    """Call the LLM expecting a JSON response. Strips markdown fences if present."""
+    """Call the LLM expecting a JSON response. Strips markdown fences and trailing text."""
     raw = call_llm(prompt, system=system, model=model, max_tokens=max_tokens)
     text = raw.strip()
     # Strip markdown code fences if the model wraps the JSON
     if text.startswith("```"):
         lines = text.splitlines()
-        # Remove first and last fence lines
         inner = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
         text = "\n".join(inner)
     try:
-        return json.loads(text)
+        # raw_decode parses the first complete JSON value and ignores any trailing text,
+        # which handles the case where the model appends an explanation after the JSON.
+        obj, _ = json.JSONDecoder().raw_decode(text)
+        return obj
     except json.JSONDecodeError as exc:
         log.error("LLM JSON parse failed: %s | raw_text_preview=%r", exc, text[:300])
         raise

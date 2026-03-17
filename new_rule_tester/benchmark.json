@@ -1,0 +1,801 @@
+{
+  "benchmark_data": [
+    {
+      "label": "R01 — Structuring: high-frequency burst with low average transfer amount",
+      "rule_desc": "Flag any account that makes 5 or more outbound transfers within a 7-day period where the average transfer amount is below $1,000",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["transaction_id", "send_amount"],
+        "conditions": [
+          {
+            "attribute": "transaction_id",
+            "operator": ">=",
+            "value": 5,
+            "aggregation": "count",
+            "window": "7d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "send_amount",
+            "operator": "<",
+            "value": 1000.0,
+            "aggregation": "average",
+            "window": "7d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "count(transaction_id[7d]) >= 5 AND average(send_amount[7d]) < 1000",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R02 — Structuring: many small transfers to one country, none exceeding threshold",
+      "rule_desc": "Alert if a user sends at least 8 transactions to Mexico in the last 30 days and no single transaction to Mexico exceeds $1,000",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["transaction_id", "receive_country_code", "send_amount"],
+        "conditions": [
+          {
+            "attribute": "transaction_id",
+            "operator": ">=",
+            "value": 8,
+            "aggregation": "count",
+            "window": "30d",
+            "logical_connector": "AND",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "in",
+            "filter_value": ["Mexico"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "send_amount",
+            "operator": "<=",
+            "value": 1000.0,
+            "aggregation": "max",
+            "window": "30d",
+            "logical_connector": "AND",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "in",
+            "filter_value": ["Mexico"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "count(transaction_id[30d] to Mexico) >= 8 AND max(send_amount[30d] to Mexico) <= 1000",
+        "high_risk_countries": ["Mexico"]
+      }
+    },
+    {
+      "label": "R03 — Layering: geographic fan-out to multiple countries with high total volume",
+      "rule_desc": "Raise an alert when an account sends to 4 or more distinct destination countries within 14 days and the total amount sent in that period exceeds $5,000",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["receive_country_code", "send_amount"],
+        "conditions": [
+          {
+            "attribute": "receive_country_code",
+            "operator": ">=",
+            "value": 4,
+            "aggregation": "distinct_count",
+            "window": "14d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 5000.0,
+            "aggregation": "sum",
+            "window": "14d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "distinct_count(receive_country_code[14d]) >= 4 AND sum(send_amount[14d]) > 5000",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R04 — Layering: combined exposure to multiple sanctioned countries (multi-country filter, >= operator)",
+      "rule_desc": "Alert if money is transferred to Iran, Syria, or North Korea in the last 30 days and the combined total sent to these countries is at least $500",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["send_amount", "receive_country_code"],
+        "conditions": [
+          {
+            "attribute": "send_amount",
+            "operator": ">=",
+            "value": 500.0,
+            "aggregation": "sum",
+            "window": "30d",
+            "logical_connector": "AND",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "in",
+            "filter_value": ["Iran", "Syria", "North Korea"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "sum(send_amount[30d] to Iran, Syria, or North Korea) >= 500",
+        "high_risk_countries": ["Iran", "Syria", "North Korea"]
+      }
+    },
+    {
+      "label": "R05 — High velocity: transaction frequency spike (Tier 2 non-overlapping count ratio)",
+      "rule_desc": "Alert when the number of transfers made in the most recent 7-day window is more than 3 times the number made in the 30 days prior to that",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["transaction_id"],
+        "conditions": [
+          {
+            "attribute": null,
+            "operator": ">",
+            "value": 3.0,
+            "aggregation": null,
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": [
+              {
+                "name": "recent_7d_count",
+                "aggregation": "count",
+                "attribute": "transaction_id",
+                "window": "7d",
+                "filter_attribute": null,
+                "filter_operator": null,
+                "filter_value": null
+              },
+              {
+                "name": "prior_30d_count",
+                "aggregation": "count",
+                "attribute": "transaction_id",
+                "window": "30d",
+                "filter_attribute": null,
+                "filter_operator": null,
+                "filter_value": null
+              }
+            ],
+            "derived_expression": "ratio",
+            "window_mode": "non_overlapping"
+          }
+        ],
+        "raw_expression": "ratio(recent_7d_count / prior_30d_count) > 3.0",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R06 — High velocity: intraday burst — more than 10 transfers in any 24-hour window",
+      "rule_desc": "Flag accounts that complete more than 10 outbound transfers within any 24-hour period",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["transaction_id"],
+        "conditions": [
+          {
+            "attribute": "transaction_id",
+            "operator": ">",
+            "value": 10,
+            "aggregation": "count",
+            "window": "1d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "count(transaction_id[1d]) > 10",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R07 — Behavioral change: total outbound spending spike (Tier 2 non-overlapping sum ratio, no country filter)",
+      "rule_desc": "Raise an alert if total outbound amount in the last 7 days is more than twice the total outbound amount in the prior 30 days",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["send_amount"],
+        "conditions": [
+          {
+            "attribute": null,
+            "operator": ">",
+            "value": 2.0,
+            "aggregation": null,
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": [
+              {
+                "name": "recent_7d_sum",
+                "aggregation": "sum",
+                "attribute": "send_amount",
+                "window": "7d",
+                "filter_attribute": null,
+                "filter_operator": null,
+                "filter_value": null
+              },
+              {
+                "name": "prior_30d_sum",
+                "aggregation": "sum",
+                "attribute": "send_amount",
+                "window": "30d",
+                "filter_attribute": null,
+                "filter_operator": null,
+                "filter_value": null
+              }
+            ],
+            "derived_expression": "ratio",
+            "window_mode": "non_overlapping"
+          }
+        ],
+        "raw_expression": "ratio(recent_7d_sum / prior_30d_sum) > 2.0",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R08 — Behavioral change: Iran transfers surge with absolute floor (Tier 2 non-overlapping >= AND Tier 1 sum)",
+      "rule_desc": "Alert when transfers to Iran in the past 7 days are at least 4 times higher than transfers to Iran in the 30-day period before that, and the recent 7-day total to Iran exceeds $1,000",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["send_amount", "receive_country_code"],
+        "conditions": [
+          {
+            "attribute": null,
+            "operator": ">=",
+            "value": 4.0,
+            "aggregation": null,
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": [
+              {
+                "name": "iran_7d_sum",
+                "aggregation": "sum",
+                "attribute": "send_amount",
+                "window": "7d",
+                "filter_attribute": "receive_country_code",
+                "filter_operator": "in",
+                "filter_value": ["Iran"]
+              },
+              {
+                "name": "iran_prior_30d_sum",
+                "aggregation": "sum",
+                "attribute": "send_amount",
+                "window": "30d",
+                "filter_attribute": "receive_country_code",
+                "filter_operator": "in",
+                "filter_value": ["Iran"]
+              }
+            ],
+            "derived_expression": "ratio",
+            "window_mode": "non_overlapping"
+          },
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 1000.0,
+            "aggregation": "sum",
+            "window": "7d",
+            "logical_connector": "AND",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "in",
+            "filter_value": ["Iran"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "ratio(iran_7d_sum / iran_prior_30d_sum) >= 4.0 AND sum(send_amount[7d] to Iran) > 1000",
+        "high_risk_countries": ["Iran"]
+      }
+    },
+    {
+      "label": "R09 — High-risk concentration: at least 30% of outbound to sanctioned bloc (multi-country, >= percentage)",
+      "rule_desc": "Alert if at least 30 percent of total outbound funds in the last 30 days were sent to Iran, Yemen, or Somalia",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["send_amount", "receive_country_code"],
+        "conditions": [
+          {
+            "attribute": "send_amount",
+            "operator": ">=",
+            "value": 0.30,
+            "aggregation": "percentage_of_total",
+            "window": "30d",
+            "logical_connector": "AND",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "in",
+            "filter_value": ["Iran", "Yemen", "Somalia"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "percentage_of_total(send_amount[30d] to Iran, Yemen, or Somalia) >= 0.30",
+        "high_risk_countries": ["Iran", "Yemen", "Somalia"]
+      }
+    },
+    {
+      "label": "R10 — New account risk: account less than 14 days old with elevated total outbound",
+      "rule_desc": "Flag accounts that are less than 14 days old and have sent more than $2,000 in total outbound transfers",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["created_at", "send_amount"],
+        "conditions": [
+          {
+            "attribute": "created_at",
+            "operator": "<",
+            "value": 14,
+            "aggregation": "days_since_first",
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 2000.0,
+            "aggregation": "sum",
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "days_since_first(created_at) < 14 AND sum(send_amount) > 2000",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R11 — Occupation mismatch: student or unemployed sending large sums (user attribute condition)",
+      "rule_desc": "Alert if a user who lists their occupation as student or unemployed sends more than $5,000 in the last 30 days",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["occupation", "send_amount"],
+        "conditions": [
+          {
+            "attribute": "occupation",
+            "operator": "in",
+            "value": ["student", "unemployed"],
+            "aggregation": null,
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 5000.0,
+            "aggregation": "sum",
+            "window": "30d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "occupation IN ['student', 'unemployed'] AND sum(send_amount[30d]) > 5000",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R12 — Cash-heavy payout: majority of outbound value disbursed via cash pickup",
+      "rule_desc": "Flag accounts where more than 60 percent of total outbound value in the last 7 days is paid out via cash pickup",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["send_amount", "payout_method"],
+        "conditions": [
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 0.60,
+            "aggregation": "percentage_of_total",
+            "window": "7d",
+            "logical_connector": "AND",
+            "filter_attribute": "payout_method",
+            "filter_operator": "==",
+            "filter_value": "cash_pickup",
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "percentage_of_total(send_amount[7d] where payout_method == cash_pickup) > 0.60",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R13 — Exclusion pattern: large outbound sums to non-whitelisted countries (not_in operator)",
+      "rule_desc": "Alert if an account sends more than $10,000 in the last 30 days to any country other than the United States, United Kingdom, Canada, or Australia",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["send_amount", "receive_country_code"],
+        "conditions": [
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 10000.0,
+            "aggregation": "sum",
+            "window": "30d",
+            "logical_connector": "AND",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "not_in",
+            "filter_value": ["United States", "United Kingdom", "Canada", "Australia"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "sum(send_amount[30d] where receive_country_code not_in [United States, United Kingdom, Canada, Australia]) > 10000",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R14 — OR chain: independent high-risk country thresholds with different limits",
+      "rule_desc": "Raise an alert if more than $3,000 is sent to Somalia in the last 30 days or more than $1,500 is sent to North Korea in the last 30 days",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["send_amount", "receive_country_code"],
+        "conditions": [
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 3000.0,
+            "aggregation": "sum",
+            "window": "30d",
+            "logical_connector": "OR",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "in",
+            "filter_value": ["Somalia"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 1500.0,
+            "aggregation": "sum",
+            "window": "30d",
+            "logical_connector": "AND",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "in",
+            "filter_value": ["North Korea"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "sum(send_amount[30d] to Somalia) > 3000 OR sum(send_amount[30d] to North Korea) > 1500",
+        "high_risk_countries": ["Somalia", "North Korea"]
+      }
+    },
+    {
+      "label": "R15 — Multi-condition AND: structuring + layering + volume threshold (3 conditions, all >=)",
+      "rule_desc": "Alert if an account makes at least 10 transactions in the last 7 days, sends to 3 or more distinct countries in that period, and the total amount sent exceeds $4,000",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["transaction_id", "receive_country_code", "send_amount"],
+        "conditions": [
+          {
+            "attribute": "transaction_id",
+            "operator": ">=",
+            "value": 10,
+            "aggregation": "count",
+            "window": "7d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "receive_country_code",
+            "operator": ">=",
+            "value": 3,
+            "aggregation": "distinct_count",
+            "window": "7d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 4000.0,
+            "aggregation": "sum",
+            "window": "7d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "count(transaction_id[7d]) >= 10 AND distinct_count(receive_country_code[7d]) >= 3 AND sum(send_amount[7d]) > 4000",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R16 — Inbound/outbound mismatch: large net inbound position exceeding outbound (Tier 2 difference)",
+      "rule_desc": "Flag accounts where total funds received in the last 30 days exceed total funds sent out in the same period by more than $10,000",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["receive_amount", "send_amount"],
+        "conditions": [
+          {
+            "attribute": null,
+            "operator": ">",
+            "value": 10000.0,
+            "aggregation": null,
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": [
+              {
+                "name": "inbound_30d_sum",
+                "aggregation": "sum",
+                "attribute": "receive_amount",
+                "window": "30d",
+                "filter_attribute": null,
+                "filter_operator": null,
+                "filter_value": null
+              },
+              {
+                "name": "outbound_30d_sum",
+                "aggregation": "sum",
+                "attribute": "send_amount",
+                "window": "30d",
+                "filter_attribute": null,
+                "filter_operator": null,
+                "filter_value": null
+              }
+            ],
+            "derived_expression": "difference",
+            "window_mode": "independent"
+          }
+        ],
+        "raw_expression": "difference(inbound_30d_sum - outbound_30d_sum) > 10000",
+        "high_risk_countries": []
+      }
+    },
+    {
+      "label": "R17 — Dormant-then-active: account active no more than 30 days with first high-risk transfer",
+      "rule_desc": "Alert if an account that has been active for no more than 30 days has sent at least one transfer to Iran or Syria",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["created_at", "transaction_id", "receive_country_code"],
+        "conditions": [
+          {
+            "attribute": "created_at",
+            "operator": "<=",
+            "value": 30,
+            "aggregation": "days_since_first",
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "transaction_id",
+            "operator": ">=",
+            "value": 1,
+            "aggregation": "count",
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "in",
+            "filter_value": ["Iran", "Syria"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "days_since_first(created_at) <= 30 AND count(transaction_id to Iran or Syria) >= 1",
+        "high_risk_countries": ["Iran", "Syria"]
+      }
+    },
+    {
+      "label": "R18 — Stateless: sanctioned destination + cash pickup + amount threshold (3-condition per-transaction rule)",
+      "rule_desc": "Block any transaction where the destination is Iran, North Korea, Syria, or Cuba, the payout method is cash pickup, and the sent amount exceeds $500",
+      "rule": {
+        "rule_type": "stateless",
+        "relevant_attributes": ["receive_country_code", "payout_method", "send_amount"],
+        "conditions": [
+          {
+            "attribute": "receive_country_code",
+            "operator": "in",
+            "value": ["Iran", "North Korea", "Syria", "Cuba"],
+            "aggregation": null,
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "payout_method",
+            "operator": "==",
+            "value": "cash_pickup",
+            "aggregation": null,
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          },
+          {
+            "attribute": "send_amount",
+            "operator": ">",
+            "value": 500.0,
+            "aggregation": null,
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "receive_country_code IN ['Iran','North Korea','Syria','Cuba'] AND payout_method == 'cash_pickup' AND send_amount > 500",
+        "high_risk_countries": ["Iran", "North Korea", "Syria", "Cuba"]
+      }
+    },
+    {
+      "label": "R19 — High-risk concentration: 20% or more of total outbound to sanctioned bloc (>= percentage, multi-country)",
+      "rule_desc": "Raise an alert when 20 percent or more of total outbound value in the last 30 days is sent to Iran, North Korea, or Yemen",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["send_amount", "receive_country_code"],
+        "conditions": [
+          {
+            "attribute": "send_amount",
+            "operator": ">=",
+            "value": 0.20,
+            "aggregation": "percentage_of_total",
+            "window": "30d",
+            "logical_connector": "AND",
+            "filter_attribute": "receive_country_code",
+            "filter_operator": "in",
+            "filter_value": ["Iran", "North Korea", "Yemen"],
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "percentage_of_total(send_amount[30d] to Iran, North Korea, or Yemen) >= 0.20",
+        "high_risk_countries": ["Iran", "North Korea", "Yemen"]
+      }
+    },
+    {
+      "label": "R20 — High velocity with floor: Tier 2 non-overlapping count ratio >= 5 AND absolute recent count >= 3",
+      "rule_desc": "Alert if an account's transaction count in the last 7 days is at least 5 times greater than in the prior 30 days and there are at least 3 transactions in the recent 7-day window",
+      "rule": {
+        "rule_type": "behavioral",
+        "relevant_attributes": ["transaction_id"],
+        "conditions": [
+          {
+            "attribute": null,
+            "operator": ">=",
+            "value": 5.0,
+            "aggregation": null,
+            "window": null,
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": [
+              {
+                "name": "recent_7d_count",
+                "aggregation": "count",
+                "attribute": "transaction_id",
+                "window": "7d",
+                "filter_attribute": null,
+                "filter_operator": null,
+                "filter_value": null
+              },
+              {
+                "name": "prior_30d_count",
+                "aggregation": "count",
+                "attribute": "transaction_id",
+                "window": "30d",
+                "filter_attribute": null,
+                "filter_operator": null,
+                "filter_value": null
+              }
+            ],
+            "derived_expression": "ratio",
+            "window_mode": "non_overlapping"
+          },
+          {
+            "attribute": "transaction_id",
+            "operator": ">=",
+            "value": 3,
+            "aggregation": "count",
+            "window": "7d",
+            "logical_connector": "AND",
+            "filter_attribute": null,
+            "filter_operator": null,
+            "filter_value": null,
+            "derived_attributes": null,
+            "derived_expression": null,
+            "window_mode": null
+          }
+        ],
+        "raw_expression": "ratio(recent_7d_count / prior_30d_count) >= 5.0 AND count(transaction_id[7d]) >= 3",
+        "high_risk_countries": []
+      }
+    }
+  ]
+}

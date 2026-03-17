@@ -109,10 +109,10 @@ Page 1 — Rule Input
       │     User reviews transactions, approves → saved to test suite
       │
       └── behavioral rule ──→ Page 2 — Test Case Builder
-            Right panel: auto-generated coverage suggestions (boundary cases,
+            Coverage suggestions pre-fetched during page transition (boundary cases,
               near-misses, window-edge tests, filter-empty cases, etc.)
             Left panel: user picks scenario type + optional intent
-            Behavioral orchestrator: generate → validate → correct loop (up to 3 attempts)
+            Behavioral orchestrator: generate → validate → correct loop (up to 3 correction passes)
             User reviews transactions + aggregate results
             User can give feedback → regenerates with that feedback carried forward
             User approves → added to test suite
@@ -151,10 +151,12 @@ Corrector (LLM)
   Approach: diagnostic-first — "here are the exact numbers, here is the gap, fix it"
       ↓
 Validator again (same deterministic logic)
-      ↓ repeat up to MAX_ATTEMPTS = 3
+      ↓ repeat up to MAX_ATTEMPTS = 4 (= 3 real correction passes)
 ```
 
 **Key asymmetry:** the generator is rule-description-first (creative, flexible); the corrector is diagnostic-first (surgical, precise). The corrector receives pre-computed shortfall values from Python — it doesn't have to do the arithmetic itself.
+
+> **Why `MAX_ATTEMPTS = 4` gives 3 correction passes:** the loop runs 4 validation checks. On attempts 0, 1, and 2 a correction call follows a failed validation. On attempt 3 the final validation result is recorded and the loop exits without a further correction call.
 
 ### Shortfall arithmetic (Tier 2 corrector)
 
@@ -195,7 +197,7 @@ When a user gives feedback and clicks "Regenerate", that string is appended to `
 
 ## Coverage suggestions
 
-When a rule is first loaded on Page 2, the app auto-generates a list of `TestSuggestion` objects covering:
+When the user clicks **Confirm and Continue** on Page 1, suggestions are fetched immediately (with a visible spinner) before navigating to the next page. They are cached in session state so the next page renders instantly. The suggestion list covers:
 
 | Pattern | Scenario | Description |
 |---|---|---|
@@ -237,6 +239,13 @@ new_rule_tester/
 │   ├── sequence_generator.py      Generates transaction sequences (stateless + behavioral)
 │   ├── sequence_corrector.py      Repairs failed sequences; contains shortfall arithmetic
 │   └── suggestion_generator.py    Generates TestSuggestion list for a rule
+│
+├── prompts/
+│   ├── rule_parser.py             SYSTEM, PROMPT_TEMPLATE
+│   ├── prototype_generator.py     SYSTEM, PROMPT_TEMPLATE, SINGLE_PROTO_TEMPLATE, CONFLICT_SECTION_TEMPLATE
+│   ├── sequence_generator.py      SYSTEM, STATELESS_PROMPT, BEHAVIORAL_PROMPT, CONFLICT_SECTION_TEMPLATE
+│   ├── sequence_corrector.py      SYSTEM, STATELESS_CORRECT_PROMPT, BEHAVIORAL_CORRECT_PROMPT
+│   └── suggestion_generator.py    SYSTEM, SUGGESTION_PROMPT
 │
 ├── validation/
 │   ├── aggregate_compute.py       Deterministic aggregate computation (no LLM)
@@ -317,3 +326,7 @@ grep "FAIL\|ERROR\|WARNING" logs/aml_tester.log
 **Background transactions are preserved.** The corrector has an explicit constraint not to modify background transactions. Only motif transactions (those matching the rule's filter) are adjusted. This keeps the account narrative intact across correction rounds.
 
 **Feedback accumulates.** All prior user feedback strings travel with the test case through every generator and corrector call. The user never has to re-state earlier instructions.
+
+**Prompts are separated from logic.** All LLM prompt strings live in `prompts/` — one file per LLM module. The `llm/` files contain only assembly logic and function signatures. This keeps logic files readable and makes prompt edits easy to find and review without touching Python logic.
+
+**`call_llm_json` uses `raw_decode`.** The JSON parser uses `json.JSONDecoder().raw_decode()` rather than `json.loads()`, which gracefully handles cases where the model appends explanation text after the JSON object. `max_tokens` is set to 8,192 to avoid truncation on long behavioral sequences.

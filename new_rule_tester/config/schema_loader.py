@@ -1,14 +1,15 @@
 """Loads schema.yml and exposes structured views used by LLM prompts and the validation engine."""
 import os
-import yaml
 from functools import lru_cache
+
+import yaml
 
 _SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.yml")
 
 
 @lru_cache(maxsize=1)
 def _load() -> dict:
-    with open(_SCHEMA_PATH, "r") as f:
+    with open(_SCHEMA_PATH) as f:
         return yaml.safe_load(f)
 
 

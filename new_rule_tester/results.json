@@ -1,0 +1,1427 @@
+{
+  "summary": {
+    "total": 20,
+    "passed": 17,
+    "failed": 3
+  },
+  "results": [
+    {
+      "rule_id": "R01",
+      "label": "R01 \u2014 Structuring: high-frequency burst with low average transfer amount",
+      "rule_desc": "Flag any account that makes 5 or more outbound transfers within a 7-day period where the average transfer amount is below $1,000",
+      "passed": true,
+      "overall_score": 0.96,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "send_amount",
+          "transaction_id"
+        ],
+        "missing": [],
+        "extra": [
+          "payment_direction"
+        ],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 2,
+      "actual_condition_count": 2,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 0.8,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": false,
+            "filter_operator": false,
+            "filter_value": false,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [
+            "filter_attribute: expected=None  got='payment_direction'",
+            "filter_operator: expected=None  got='=='",
+            "filter_value: expected=None  got='outbound'"
+          ],
+          "da_comparisons": []
+        },
+        {
+          "index": 1,
+          "score": 0.8,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": false,
+            "filter_operator": false,
+            "filter_value": false,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [
+            "filter_attribute: expected=None  got='payment_direction'",
+            "filter_operator: expected=None  got='=='",
+            "filter_value: expected=None  got='outbound'"
+          ],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R02",
+      "label": "R02 \u2014 Structuring: many small transfers to one country, none exceeding threshold",
+      "rule_desc": "Alert if a user sends at least 8 transactions to Mexico in the last 30 days and no single transaction to Mexico exceeds $1,000",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_country_code",
+          "send_amount",
+          "transaction_id"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [
+          "mexico"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 2,
+      "actual_condition_count": 2,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        },
+        {
+          "index": 1,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R03",
+      "label": "R03 \u2014 Layering: geographic fan-out to multiple countries with high total volume",
+      "rule_desc": "Raise an alert when an account sends to 4 or more distinct destination countries within 14 days and the total amount sent in that period exceeds $5,000",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_country_code",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 2,
+      "actual_condition_count": 2,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        },
+        {
+          "index": 1,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R04",
+      "label": "R04 \u2014 Layering: combined exposure to multiple sanctioned countries (multi-country filter, >= operator)",
+      "rule_desc": "Alert if money is transferred to Iran, Syria, or North Korea in the last 30 days and the combined total sent to these countries is at least $500",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_country_code",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [
+          "created_at"
+        ],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [
+          "iran",
+          "north korea",
+          "syria"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 1,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R05",
+      "label": "R05 \u2014 High velocity: transaction frequency spike (Tier 2 non-overlapping count ratio)",
+      "rule_desc": "Alert when the number of transfers made in the most recent 7-day window is more than 3 times the number made in the 30 days prior to that",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "transaction_id"
+        ],
+        "missing": [],
+        "extra": [
+          "created_at"
+        ],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 1,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": [
+            {
+              "index": 0,
+              "name_match": true,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 1.0,
+              "notes": []
+            },
+            {
+              "index": 1,
+              "name_match": true,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 1.0,
+              "notes": []
+            }
+          ]
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R06",
+      "label": "R06 \u2014 High velocity: intraday burst \u2014 more than 10 transfers in any 24-hour window",
+      "rule_desc": "Flag accounts that complete more than 10 outbound transfers within any 24-hour period",
+      "passed": false,
+      "overall_score": 0.942,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "transaction_id"
+        ],
+        "missing": [],
+        "extra": [
+          "payment_direction"
+        ],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 1,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 0.711,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": false,
+            "logical_connector": true,
+            "filter_attribute": false,
+            "filter_operator": false,
+            "filter_value": false,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [
+            "window: expected='1d'  got='24h'",
+            "filter_attribute: expected=None  got='payment_direction'",
+            "filter_operator: expected=None  got='=='",
+            "filter_value: expected=None  got='outbound'"
+          ],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R07",
+      "label": "R07 \u2014 Behavioral change: total outbound spending spike (Tier 2 non-overlapping sum ratio, no country filter)",
+      "rule_desc": "Raise an alert if total outbound amount in the last 7 days is more than twice the total outbound amount in the prior 30 days",
+      "passed": true,
+      "overall_score": 0.997,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 1,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 0.984,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": [
+            {
+              "index": 0,
+              "name_match": false,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 0.8,
+              "notes": [
+                "name: expected='recent_7d_sum' got='outbound_7d_sum'"
+              ]
+            },
+            {
+              "index": 1,
+              "name_match": false,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 0.8,
+              "notes": [
+                "name: expected='prior_30d_sum' got='outbound_30d_sum'"
+              ]
+            }
+          ]
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R08",
+      "label": "R08 \u2014 Behavioral change: Iran transfers surge with absolute floor (Tier 2 non-overlapping >= AND Tier 1 sum)",
+      "rule_desc": "Alert when transfers to Iran in the past 7 days are at least 4 times higher than transfers to Iran in the 30-day period before that, and the recent 7-day total to Iran exceeds $1,000",
+      "passed": true,
+      "overall_score": 0.999,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_country_code",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [
+          "created_at"
+        ],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [
+          "iran"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 2,
+      "actual_condition_count": 2,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 0.992,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": [
+            {
+              "index": 0,
+              "name_match": true,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 1.0,
+              "notes": []
+            },
+            {
+              "index": 1,
+              "name_match": false,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 0.8,
+              "notes": [
+                "name: expected='iran_prior_30d_sum' got='iran_30d_prior_sum'"
+              ]
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R09",
+      "label": "R09 \u2014 High-risk concentration: at least 30% of outbound to sanctioned bloc (multi-country, >= percentage)",
+      "rule_desc": "Alert if at least 30 percent of total outbound funds in the last 30 days were sent to Iran, Yemen, or Somalia",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_country_code",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [
+          "iran",
+          "somalia",
+          "yemen"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 1,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R10",
+      "label": "R10 \u2014 New account risk: account less than 14 days old with elevated total outbound",
+      "rule_desc": "Flag accounts that are less than 14 days old and have sent more than $2,000 in total outbound transfers",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "created_at",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 2,
+      "actual_condition_count": 2,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        },
+        {
+          "index": 1,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R11",
+      "label": "R11 \u2014 Occupation mismatch: student or unemployed sending large sums (user attribute condition)",
+      "rule_desc": "Alert if a user who lists their occupation as student or unemployed sends more than $5,000 in the last 30 days",
+      "passed": false,
+      "overall_score": 0.786,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "occupation",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": false,
+      "expected_condition_count": 2,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 0.356,
+          "field_results": {
+            "attribute": false,
+            "operator": false,
+            "value": false,
+            "aggregation": false,
+            "window": false,
+            "logical_connector": true,
+            "filter_attribute": false,
+            "filter_operator": false,
+            "filter_value": false,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [
+            "attribute: expected='occupation'  got='send_amount'",
+            "operator: expected='in'  got='>'",
+            "value: expected=['student', 'unemployed']  got=5000.0",
+            "aggregation: expected=None  got='sum'",
+            "window: expected=None  got='30d'",
+            "filter_attribute: expected=None  got='occupation'",
+            "filter_operator: expected=None  got='in'",
+            "filter_value: expected=None  got=['student', 'unemployed']"
+          ],
+          "da_comparisons": []
+        },
+        {
+          "index": 1,
+          "score": 0.0,
+          "field_results": {},
+          "notes": [
+            "condition[1] missing in actual"
+          ],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R12",
+      "label": "R12 \u2014 Cash-heavy payout: majority of outbound value disbursed via cash pickup",
+      "rule_desc": "Flag accounts where more than 60 percent of total outbound value in the last 7 days is paid out via cash pickup",
+      "passed": true,
+      "overall_score": 0.973,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "payout_method",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 1,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 0.867,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": false,
+            "filter_value": false,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [
+            "filter_operator: expected='=='  got='in'",
+            "filter_value: expected='cash_pickup'  got=['cash_pickup']"
+          ],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R13",
+      "label": "R13 \u2014 Exclusion pattern: large outbound sums to non-whitelisted countries (not_in operator)",
+      "rule_desc": "Alert if an account sends more than $10,000 in the last 30 days to any country other than the United States, United Kingdom, Canada, or Australia",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_country_code",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 1,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R14",
+      "label": "R14 \u2014 OR chain: independent high-risk country thresholds with different limits",
+      "rule_desc": "Raise an alert if more than $3,000 is sent to Somalia in the last 30 days or more than $1,500 is sent to North Korea in the last 30 days",
+      "passed": true,
+      "overall_score": 0.991,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_country_code",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [
+          "north korea",
+          "somalia"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 2,
+      "actual_condition_count": 2,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        },
+        {
+          "index": 1,
+          "score": 0.911,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": false,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [
+            "logical_connector: expected='AND'  got='OR'"
+          ],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R15",
+      "label": "R15 \u2014 Multi-condition AND: structuring + layering + volume threshold (3 conditions, all >=)",
+      "rule_desc": "Alert if an account makes at least 10 transactions in the last 7 days, sends to 3 or more distinct countries in that period, and the total amount sent exceeds $4,000",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_country_code",
+          "send_amount",
+          "transaction_id"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 3,
+      "actual_condition_count": 3,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        },
+        {
+          "index": 1,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        },
+        {
+          "index": 2,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R16",
+      "label": "R16 \u2014 Inbound/outbound mismatch: large net inbound position exceeding outbound (Tier 2 difference)",
+      "rule_desc": "Flag accounts where total funds received in the last 30 days exceed total funds sent out in the same period by more than $10,000",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_amount",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 1,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": [
+            {
+              "index": 0,
+              "name_match": true,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 1.0,
+              "notes": []
+            },
+            {
+              "index": 1,
+              "name_match": true,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 1.0,
+              "notes": []
+            }
+          ]
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R17",
+      "label": "R17 \u2014 Dormant-then-active: account active no more than 30 days with first high-risk transfer",
+      "rule_desc": "Alert if an account that has been active for no more than 30 days has sent at least one transfer to Iran or Syria",
+      "passed": false,
+      "overall_score": 0.878,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "created_at",
+          "receive_country_code"
+        ],
+        "missing": [
+          "transaction_id"
+        ],
+        "extra": [],
+        "score": 0.667
+      },
+      "high_risk_countries": {
+        "matched": [
+          "iran",
+          "syria"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 2,
+      "actual_condition_count": 2,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        },
+        {
+          "index": 1,
+          "score": 0.444,
+          "field_results": {
+            "attribute": false,
+            "operator": false,
+            "value": false,
+            "aggregation": false,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": false,
+            "filter_operator": false,
+            "filter_value": false,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [
+            "attribute: expected='transaction_id'  got='receive_country_code'",
+            "operator: expected='>='  got='in'",
+            "value: expected=1  got=['Iran', 'Syria']",
+            "aggregation: expected='count'  got=None",
+            "filter_attribute: expected='receive_country_code'  got=None",
+            "filter_operator: expected='in'  got=None",
+            "filter_value: expected=['Iran', 'Syria']  got=None"
+          ],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R18",
+      "label": "R18 \u2014 Stateless: sanctioned destination + cash pickup + amount threshold (3-condition per-transaction rule)",
+      "rule_desc": "Block any transaction where the destination is Iran, North Korea, Syria, or Cuba, the payout method is cash pickup, and the sent amount exceeds $500",
+      "passed": true,
+      "overall_score": 0.988,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "payout_method",
+          "receive_country_code",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [
+          "cuba",
+          "iran",
+          "north korea",
+          "syria"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 3,
+      "actual_condition_count": 3,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        },
+        {
+          "index": 1,
+          "score": 0.822,
+          "field_results": {
+            "attribute": true,
+            "operator": false,
+            "value": false,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [
+            "operator: expected='=='  got='in'",
+            "value: expected='cash_pickup'  got=['cash_pickup']"
+          ],
+          "da_comparisons": []
+        },
+        {
+          "index": 2,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R19",
+      "label": "R19 \u2014 High-risk concentration: 20% or more of total outbound to sanctioned bloc (>= percentage, multi-country)",
+      "rule_desc": "Raise an alert when 20 percent or more of total outbound value in the last 30 days is sent to Iran, North Korea, or Yemen",
+      "passed": true,
+      "overall_score": 1.0,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "receive_country_code",
+          "send_amount"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [
+          "iran",
+          "north korea",
+          "yemen"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 1,
+      "actual_condition_count": 1,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    },
+    {
+      "rule_id": "R20",
+      "label": "R20 \u2014 High velocity with floor: Tier 2 non-overlapping count ratio >= 5 AND absolute recent count >= 3",
+      "rule_desc": "Alert if an account's transaction count in the last 7 days is at least 5 times greater than in the prior 30 days and there are at least 3 transactions in the recent 7-day window",
+      "passed": true,
+      "overall_score": 0.992,
+      "rule_type_match": true,
+      "relevant_attributes": {
+        "matched": [
+          "transaction_id"
+        ],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "high_risk_countries": {
+        "matched": [],
+        "missing": [],
+        "extra": [],
+        "score": 1.0
+      },
+      "condition_count_match": true,
+      "expected_condition_count": 2,
+      "actual_condition_count": 2,
+      "conditions": [
+        {
+          "index": 0,
+          "score": 0.918,
+          "field_results": {
+            "attribute": true,
+            "operator": false,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [
+            "operator: expected='>='  got='>'"
+          ],
+          "da_comparisons": [
+            {
+              "index": 0,
+              "name_match": true,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 1.0,
+              "notes": []
+            },
+            {
+              "index": 1,
+              "name_match": true,
+              "aggregation_match": true,
+              "attribute_match": true,
+              "window_match": true,
+              "filter_match": true,
+              "score": 1.0,
+              "notes": []
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "score": 1.0,
+          "field_results": {
+            "attribute": true,
+            "operator": true,
+            "value": true,
+            "aggregation": true,
+            "window": true,
+            "logical_connector": true,
+            "filter_attribute": true,
+            "filter_operator": true,
+            "filter_value": true,
+            "derived_expression": true,
+            "window_mode": true,
+            "derived_attribute_count": true
+          },
+          "notes": [],
+          "da_comparisons": []
+        }
+      ],
+      "error": ""
+    }
+  ]
+}

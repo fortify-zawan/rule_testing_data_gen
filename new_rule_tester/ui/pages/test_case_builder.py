@@ -11,12 +11,12 @@ Feedback History: all prior feedback strings are accumulated on the test case an
 passed to every regeneration so earlier instructions are never forgotten.
 """
 import streamlit as st
-from domain.models import Rule, BehavioralTestCase, TestSuggestion
-from orchestration.behavioral_orchestrator import run as run_behavioral
-from llm.suggestion_generator import generate_suggestions
-from ui.state import go_to, log_status, clear_status_log
-from export.exporter import export_csv, export_json, export_xlsx
 
+from domain.models import BehavioralTestCase, Rule, TestSuggestion
+from export.exporter import export_csv, export_json, export_xlsx
+from llm.suggestion_generator import generate_suggestions
+from orchestration.behavioral_orchestrator import run as run_behavioral
+from ui.state import clear_status_log, go_to, log_status
 
 # ── Suggestion panel helpers ──────────────────────────────────────────────────
 
@@ -120,7 +120,7 @@ def _render_test_cases_content(rule: Rule, cases: list[BehavioralTestCase]):
 
             toggle_key = f"show_txns_{i}"
             show_txns = st.session_state.get(toggle_key, False)
-            btn_label = f"▲ Hide transactions" if show_txns else f"▼ View {len(case.transactions)} transactions"
+            btn_label = "▲ Hide transactions" if show_txns else f"▼ View {len(case.transactions)} transactions"
             if st.button(btn_label, key=f"toggle_txns_{i}", use_container_width=True):
                 st.session_state[toggle_key] = not show_txns
                 st.rerun()

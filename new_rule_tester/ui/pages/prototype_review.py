@@ -6,16 +6,15 @@ After reviewing cases, "Add to Suite" locks them in and resets the draft so anot
 prototype of the same type can be started.
 Generated cases accumulate in the right-hand panel alongside coverage suggestions.
 """
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
-from domain.models import Rule, Prototype, Transaction, TestSuggestion
+from domain.models import Prototype, Rule, TestSuggestion, Transaction
+from export.exporter import export_csv, export_json, export_xlsx
 from llm.prototype_generator import generate_prototypes, generate_single_prototype
 from llm.suggestion_generator import generate_suggestions
 from orchestration.stateless_orchestrator import run_single
-from ui.state import go_to, log_status, clear_status_log
-from export.exporter import export_csv, export_json, export_xlsx
-
+from ui.state import clear_status_log, go_to, log_status
 
 # ── Shared badges ──────────────────────────────────────────────────────────────
 
@@ -101,7 +100,7 @@ def _render_generated_cases_content(rule: Rule):
 
             toggle_key = f"show_{tag}_group_{gi}"
             show = st.session_state.get(toggle_key, False)
-            btn_label = f"▲ Hide" if show else f"▼ {len(group)} transactions · {status_str}"
+            btn_label = "▲ Hide" if show else f"▼ {len(group)} transactions · {status_str}"
             with st.container(border=True):
                 st.caption(f"Prototype {gi + 1}")
                 if st.button(btn_label, key=f"toggle_{tag}_grp_{gi}", use_container_width=True):
@@ -209,11 +208,12 @@ def _render_prototype_section(rule: Rule, scenario_type: str):
             st.session_state.prefill_proto_intent = None
             with st.spinner(f"Generating {scenario_type} prototype from suggestion..."):
                 try:
-                    new_proto = generate_single_prototype(
+                    new_proto, conflicts = generate_single_prototype(
                         rule, scenario_type=scenario_type,
                         feedback_history=[prefill_intent],
                     )
                     st.session_state[proto_key] = new_proto
+                    st.session_state[f"{scenario_type}_proto_conflicts"] = conflicts
                     st.rerun()
                 except Exception as e:
                     st.error(f"Failed to generate prototype: {e}")
@@ -223,7 +223,7 @@ def _render_prototype_section(rule: Rule, scenario_type: str):
         if st.button(label, key=f"start_{scenario_type}"):
             with st.spinner(f"Generating {scenario_type} prototype..."):
                 try:
-                    new_proto = generate_single_prototype(rule, scenario_type=scenario_type)
+                    new_proto, _ = generate_single_prototype(rule, scenario_type=scenario_type)
                     st.session_state[proto_key] = new_proto
                     st.rerun()
                 except Exception as e:
@@ -240,6 +240,14 @@ def _render_prototype_section(rule: Rule, scenario_type: str):
         for attr, val in proto.attributes.items():
             st.markdown(f"- **{attr}:** {val}")
 
+    conflicts = st.session_state.get(f"{scenario_type}_proto_conflicts", [])
+    if conflicts and not is_approved:
+        lines = ["⚠️ Note: one or more of your instructions may conflict with the rule and could be overridden during sequence generation:"]
+        for c in conflicts:
+            lines.append(f"  • \"{c.get('feedback_instruction', '')}\"")
+            lines.append(f"    → {c.get('explanation', '')} (affects: {c.get('conflicting_condition', '')})")
+        st.warning("\n".join(lines))
+
     if not is_approved:
         # Refinement controls
         _render_feedback_history(proto, scenario_type)
@@ -255,25 +263,28 @@ def _render_prototype_section(rule: Rule, scenario_type: str):
         with col1:
             if st.button("Regenerate", key=f"regen_{scenario_type}",
                          disabled=not (feedback or "").strip()):
-                with st.spinner(f"Regenerating..."):
+                with st.spinner("Regenerating..."):
                     try:
                         new_history = list(proto.user_feedback_history) + [feedback.strip()]
-                        updated = generate_single_prototype(
+                        updated, conflicts = generate_single_prototype(
                             rule, scenario_type=scenario_type,
                             feedback_history=new_history, current_attrs=proto.attributes,
                         )
                         st.session_state[proto_key] = updated
+                        st.session_state[f"{scenario_type}_proto_conflicts"] = conflicts
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to regenerate: {e}")
 
         with col2:
             if st.button("Discard", key=f"discard_{scenario_type}"):
+                st.session_state[f"{scenario_type}_proto_conflicts"] = []
                 _reset_draft(scenario_type)
                 st.rerun()
 
         with col3:
-            if st.button(f"Approve", key=f"approve_{scenario_type}", type="primary"):
+            if st.button("Approve", key=f"approve_{scenario_type}", type="primary"):
+                st.session_state[f"{scenario_type}_proto_conflicts"] = []
                 st.session_state[approved_key] = True
                 st.rerun()
 
@@ -286,7 +297,7 @@ def _render_prototype_section(rule: Rule, scenario_type: str):
         )
         col1, col2 = st.columns(2)
         with col1:
-            if st.button(f"Generate Cases", key=f"gen_{scenario_type}", type="primary"):
+            if st.button("Generate Cases", key=f"gen_{scenario_type}", type="primary"):
                 clear_status_log()
                 status_placeholder = st.empty()
                 log_lines = []
