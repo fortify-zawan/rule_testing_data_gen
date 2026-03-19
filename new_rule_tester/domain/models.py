@@ -26,7 +26,7 @@ class RuleCondition:
     attribute: str | None
     operator: str               # >, <, >=, <=, ==, !=, in, not_in
     value: Any
-    aggregation: str | None = None   # sum, count, percentage_of_total, ratio, distinct_count
+    aggregation: str | None = None   # sum, count, percentage_of_total, ratio, distinct_count, shared_distinct_count
     window: str | None = None        # e.g. "30d", "24h"
     logical_connector: str = "AND"      # AND or OR (how this connects to the NEXT condition)
     # For percentage_of_total, ratio (Pattern A), and filtered count:
@@ -34,6 +34,11 @@ class RuleCondition:
     filter_attribute: str | None = None
     filter_operator: str | None = None
     filter_value: Any | None = None
+    group_by: str | None = None         # attribute to partition by before aggregating (e.g. "recipient_id")
+    group_mode: str = "any"             # "any" = at least one group fires; "all" = every group must fire
+    link_attribute: list[str] | None = None  # shared_distinct_count: attributes defining the "connection"
+                                             # between primary values (OR semantics)
+                                             # e.g. ["email", "phone"] — share any one = connected
     # Tier 2 (derived) condition fields.
     # When derived_attributes is set, the engine computes each DerivedAttr to a scalar
     # value, then combines them with derived_expression, and compares to value.
@@ -46,7 +51,13 @@ class RuleCondition:
         if self.derived_attributes:
             names = "/".join(da.name for da in self.derived_attributes)
             return f"{self.derived_expression or 'derived'}({names})"
-        return f"{self.aggregation}({self.attribute})"
+        if self.link_attribute:
+            base = f"{self.aggregation}({self.attribute}:{','.join(self.link_attribute)})"
+        else:
+            base = f"{self.aggregation}({self.attribute})"
+        if self.group_by:
+            return f"{base}_by_{self.group_by}"
+        return base
 
 
 @dataclass

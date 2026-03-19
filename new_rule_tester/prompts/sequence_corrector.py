@@ -83,6 +83,20 @@ transactions, you may add 1-2 new motif transactions or adjust their amounts.
 The account narrative, background activity pattern, and temporal spread must remain intact.
 Never modify background transactions regardless of period.
 
+If the failing condition uses `shared_distinct_count` (link_attribute is set):
+- RISKY fix: find the target recipient group. Give ≥2 distinct user_ids in that group the SAME
+  value for one link attribute (e.g. user_A and user_B both get email="shared@example.com").
+  Do NOT change their other attributes — only adjust the link attribute values.
+- GENUINE fix: ensure no two user_ids in any recipient group share any link attribute value.
+  Make each sender's email/phone/device_id unique across the whole sequence.
+
+If the failing condition uses GROUP BY (e.g. group_by=recipient_id): the validation reports
+the worst-case group value (max for >, min for <). To repair:
+- RISKY: concentrate enough motif transactions in ONE group to push that group's aggregate
+  above the threshold. Do not spread motif transactions evenly — focus them on a single group.
+- GENUINE: ensure no single group accumulates enough to trigger — if one group is too high,
+  move some of its motif transactions to a different group value (change the group_by attribute).
+
 --- SECTION C — Customer archetype ---
 Maintain a consistent customer profile across the repaired sequence. Transaction sizes,
 frequency, destinations, and timing should remain consistent with the account type

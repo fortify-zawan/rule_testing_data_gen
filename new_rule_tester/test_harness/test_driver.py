@@ -64,6 +64,9 @@ def _hydrate_condition(raw: dict) -> RuleCondition:
         filter_attribute=raw.get("filter_attribute"),
         filter_operator=fop,
         filter_value=_coerce_list(fop, raw.get("filter_value")),
+        group_by=raw.get("group_by"),
+        group_mode=raw.get("group_mode", "any"),
+        link_attribute=raw.get("link_attribute"),
         derived_attributes=(
             [_hydrate_da(da) for da in raw["derived_attributes"]]
             if raw.get("derived_attributes") else None

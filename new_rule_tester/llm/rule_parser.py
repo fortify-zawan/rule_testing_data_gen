@@ -53,6 +53,9 @@ def parse_rule(description: str) -> Rule:
             filter_attribute=canonical_name(c["filter_attribute"]) if c.get("filter_attribute") else None,
             filter_operator=c.get("filter_operator"),
             filter_value=_coerce_filter_value(c.get("filter_operator"), c.get("filter_value")),
+            group_by=canonical_name(c["group_by"]) if c.get("group_by") else None,
+            group_mode=c.get("group_mode", "any"),
+            link_attribute=[canonical_name(la) for la in c["link_attribute"]] if c.get("link_attribute") else None,
             derived_attributes=[_hydrate_derived_attr(da) for da in c["derived_attributes"]]
                                 if c.get("derived_attributes") else None,
             derived_expression=c.get("derived_expression"),

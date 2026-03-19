@@ -238,10 +238,16 @@ def correct_behavioral_sequence(
     )
     for fc in failed_conditions:
         log.info("corrector | failed: %s %s %s (actual=%s)", fc.attribute, fc.operator, fc.threshold, fc.actual_value)
-    failed_desc = "\n".join(
-        f"- {r.attribute} {r.operator} {r.threshold}: actual was {r.actual_value} → FAIL"
-        for r in failed_conditions
-    )
+    # Build a condition lookup so we can annotate group_by info on each failed condition
+    cond_by_key = {c.aggregate_key(): c for c in rule.conditions if c.aggregation}
+    failed_lines = []
+    for r in failed_conditions:
+        line = f"- {r.attribute} {r.operator} {r.threshold}: actual was {r.actual_value} → FAIL"
+        cond = cond_by_key.get(r.attribute)
+        if cond and cond.group_by:
+            line += f"  [group_by={cond.group_by}, group_mode={cond.group_mode or 'any'}: actual={r.actual_value} is the {('max' if cond.operator not in ('<', '<=') else 'min')} across all {cond.group_by} groups]"
+        failed_lines.append(line)
+    failed_desc = "\n".join(failed_lines)
     agg_json = json.dumps(aggregates, indent=2)
 
     if feedback_history:

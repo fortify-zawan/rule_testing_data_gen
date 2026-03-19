@@ -104,6 +104,16 @@ transaction_attributes:
 # Attributes of the sending user (account-level, not per-transaction).
 
 user_attributes:
+  email:
+    type: categorical
+    description: Email address of the user (PII — used for shared-identity detection)
+    aliases: [email_address, user_email]
+
+  phone:
+    type: categorical
+    description: Phone number of the user (PII — used for shared-identity detection)
+    aliases: [phone_number, mobile, mobile_number, user_phone]
+
   nationality_code:
     type: categorical
     description: Nationality of the user — use full country name (e.g. "Iranian", "British")
@@ -199,6 +209,15 @@ aggregations:
   distinct_count:
     applies_to: categorical
     description: Number of unique values of a categorical attribute across the sequence
+
+  shared_distinct_count:
+    applies_to: categorical
+    description: >
+      Count of distinct values of `attribute` (e.g. user_id) that share at least one value
+      of any link_attribute (e.g. email, phone) with at least one other distinct value.
+      Requires link_attribute to be set on the condition.
+      Use with group_by to scope per recipient/entity.
+      Example: count of senders who share email or phone per recipient.
 
   days_since_first:
     applies_to: datetime

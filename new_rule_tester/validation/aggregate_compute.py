@@ -4,7 +4,7 @@ Reads RuleCondition aggregation types and computes values from the transaction l
 No LLM involved — fully deterministic.
 
 Supported aggregations (Tier 1): sum, count, percentage_of_total, ratio, distinct_count,
-  average, max, days_since_first
+  shared_distinct_count, average, max, days_since_first
 
 Tier 2 (derived conditions): each DerivedAttr is computed to a scalar, then
   combined with derived_expression ("ratio" or "difference").
@@ -208,6 +208,99 @@ def _compute_da(da: DerivedAttr, pool: list[Transaction]) -> float:
     return float(len(pool))  # safe fallback
 
 
+# ─── Tier 1 aggregation helper ────────────────────────────────────────────────
+
+def _compute_tier1_agg(cond: RuleCondition, txns: list[Transaction], rule: Rule) -> float:
+    """Compute a Tier 1 aggregate for an already-windowed transaction list."""
+    if cond.aggregation == "sum":
+        if cond.filter_attribute and cond.filter_operator is not None:
+            filtered = [t for t in txns if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)]
+            return sum(_get_values(filtered, cond.attribute))
+        return sum(_get_values(txns, cond.attribute))
+
+    if cond.aggregation == "count":
+        if cond.filter_attribute and cond.filter_operator is not None:
+            return float(sum(
+                1 for t in txns
+                if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)
+            ))
+        return float(len(txns))
+
+    if cond.aggregation == "distinct_count":
+        uniq = {str(t.attributes[cond.attribute]) for t in txns if cond.attribute in t.attributes}
+        return float(len(uniq))
+
+    if cond.aggregation == "shared_distinct_count":
+        from collections import defaultdict
+        link_attrs = cond.link_attribute or []
+        link_to_primaries: dict[tuple, set] = defaultdict(set)
+        for t in txns:
+            primary = t.attributes.get(cond.attribute)
+            if primary is None:
+                continue
+            for la in link_attrs:
+                lv = t.attributes.get(la)
+                if lv is not None:
+                    link_to_primaries[(la, str(lv))].add(str(primary))
+        shared: set[str] = set()
+        for primaries in link_to_primaries.values():
+            if len(primaries) > 1:
+                shared.update(primaries)
+        return float(len(shared))
+
+    if cond.aggregation == "average":
+        if cond.filter_attribute and cond.filter_operator is not None:
+            filtered = [t for t in txns if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)]
+            vals = _get_values(filtered, cond.attribute)
+        else:
+            vals = _get_values(txns, cond.attribute)
+        return sum(vals) / len(vals) if vals else 0.0
+
+    if cond.aggregation == "max":
+        if cond.filter_attribute and cond.filter_operator is not None:
+            filtered = [t for t in txns if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)]
+            vals = _get_values(filtered, cond.attribute)
+        else:
+            vals = _get_values(txns, cond.attribute)
+        return max(vals) if vals else 0.0
+
+    if cond.aggregation == "percentage_of_total":
+        all_vals = _get_values(txns, cond.attribute)
+        total = sum(all_vals)
+        if total == 0:
+            return 0.0
+        subset = _get_subset(txns, cond, rule)
+        subset_total = sum(_get_values(subset, cond.attribute))
+        return subset_total / total
+
+    if cond.aggregation == "ratio":
+        all_vals = _get_values(txns, cond.attribute)
+        total = sum(all_vals)
+        subset = _get_subset(txns, cond, rule)
+        subset_total = sum(_get_values(subset, cond.attribute))
+        complement = total - subset_total
+        return subset_total / complement if complement != 0 else float("inf")
+
+    if cond.aggregation == "days_since_first":
+        all_dates = [d for t in txns if (d := _get_date(t)) is not None]
+        if not all_dates:
+            return 0.0
+        latest = max(all_dates)
+        if cond.filter_attribute and cond.filter_operator is not None:
+            filtered = [t for t in txns if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)]
+            target_dates = [d for t in filtered if (d := _get_date(t)) is not None]
+        else:
+            target_dates = all_dates
+        earliest = min(target_dates) if target_dates else latest
+        return float((latest - earliest).days)
+
+    raise ValueError(
+        f"Unsupported aggregation '{cond.aggregation}' on attribute '{cond.attribute}'. "
+        f"Supported: sum, count, average, max, percentage_of_total, ratio, distinct_count, "
+        f"shared_distinct_count, days_since_first."
+    )
+
+
 # ─── Main computation ─────────────────────────────────────────────────────────
 
 def compute_aggregates(rule: Rule, transactions: list[Transaction]) -> dict:
@@ -315,95 +408,29 @@ def compute_aggregates(rule: Rule, transactions: list[Transaction]) -> dict:
 
         key = cond.aggregate_key()
 
-        if cond.aggregation == "sum":
-            if cond.filter_attribute and cond.filter_operator is not None:
-                filtered = [t for t in txns if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)]
-                results[key] = sum(_get_values(filtered, cond.attribute))
-            else:
-                results[key] = sum(_get_values(txns, cond.attribute))
-
-        elif cond.aggregation == "count":
-            # If a filter is specified, count only matching transactions
-            if cond.filter_attribute and cond.filter_operator is not None:
-                results[key] = sum(
-                    1 for t in txns
-                    if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)
-                )
-            else:
-                results[key] = len(txns)
-
-        elif cond.aggregation == "distinct_count":
-            uniq = {str(t.attributes[cond.attribute]) for t in txns if cond.attribute in t.attributes}
-            results[key] = len(uniq)
-
-        elif cond.aggregation == "average":
-            if cond.filter_attribute and cond.filter_operator is not None:
-                filtered = [t for t in txns if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)]
-                vals = _get_values(filtered, cond.attribute)
-            else:
-                vals = _get_values(txns, cond.attribute)
-            results[key] = sum(vals) / len(vals) if vals else 0.0
-
-        elif cond.aggregation == "max":
-            if cond.filter_attribute and cond.filter_operator is not None:
-                filtered = [t for t in txns if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)]
-                vals = _get_values(filtered, cond.attribute)
-            else:
-                vals = _get_values(txns, cond.attribute)
-            results[key] = max(vals) if vals else 0.0
-
-        elif cond.aggregation == "percentage_of_total":
-            all_vals = _get_values(txns, cond.attribute)
-            total = sum(all_vals)
-            if total == 0:
+        if cond.group_by:
+            # Partition by group_by attribute, compute aggregate per group,
+            # then reduce to a single decisive value:
+            #   any + (> / >=) → max across groups (at least one group fires)
+            #   any + (< / <=) → min across groups
+            #   all + (> / >=) → min across groups (every group must fire)
+            #   all + (< / <=) → max across groups
+            groups: dict[str, list[Transaction]] = {}
+            for t in txns:
+                gval = str(t.attributes.get(cond.group_by, "__none__"))
+                groups.setdefault(gval, []).append(t)
+            group_values = {gval: _compute_tier1_agg(cond, gtxns, rule) for gval, gtxns in groups.items()}
+            if not group_values:
                 results[key] = 0.0
             else:
-                subset = _get_subset(txns, cond, rule)
-                subset_total = sum(_get_values(subset, cond.attribute))
-                results[key] = subset_total / total
-
-        elif cond.aggregation == "ratio":
-            # Pattern A: legacy subset ÷ complement (same window)
-            all_vals = _get_values(txns, cond.attribute)
-            total = sum(all_vals)
-            subset = _get_subset(txns, cond, rule)
-            subset_total = sum(_get_values(subset, cond.attribute))
-            complement = total - subset_total
-            results[key] = subset_total / complement if complement != 0 else float("inf")
-
-        elif cond.aggregation == "days_since_first":
-            # Parse all dates in the window
-            def _parse_date(t: Transaction) -> datetime | None:
-                raw = t.attributes.get("created_at") or t.attributes.get("date")
-                if not raw:
-                    return None
-                try:
-                    return datetime.strptime(str(raw)[:10], "%Y-%m-%d")
-                except ValueError:
-                    return None
-
-            all_dates = [d for t in txns if (d := _parse_date(t)) is not None]
-            if not all_dates:
-                results[key] = 0.0
-            else:
-                latest = max(all_dates)
-                # If filter set, find earliest among matching transactions; else earliest of all
-                if cond.filter_attribute and cond.filter_operator is not None:
-                    filtered = [t for t in txns if _matches_filter(t, cond.filter_attribute, cond.filter_operator, cond.filter_value)]
-                    target_dates = [d for t in filtered if (d := _parse_date(t)) is not None]
-                else:
-                    target_dates = all_dates
-                earliest = min(target_dates) if target_dates else latest
-                results[key] = float((latest - earliest).days)
-
+                is_any = (cond.group_mode or "any") == "any"
+                lt_op = cond.operator in ("<", "<=")
+                use_max = (is_any and not lt_op) or (not is_any and lt_op)
+                results[key] = max(group_values.values()) if use_max else min(group_values.values())
+            log.debug("compute_aggregates | %s = %s (groups=%d)", key, results[key], len(group_values))
         else:
-            # Unsupported aggregation — raise clearly rather than silently returning 0
-            raise ValueError(
-                f"Unsupported aggregation '{cond.aggregation}' on attribute '{cond.attribute}'. "
-                f"Supported: sum, count, average, max, percentage_of_total, ratio, distinct_count, days_since_first."
-            )
-
-        log.debug("compute_aggregates | %s = %s", key, results.get(key))
+            results[key] = _compute_tier1_agg(cond, txns, rule)
+            log.debug("compute_aggregates | %s = %s", key, results.get(key))
 
     log.debug("compute_aggregates | full results: %s", results)
     return results

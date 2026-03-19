@@ -150,7 +150,7 @@ def render():
                 val = col3.text_input("Value", value=str(cond.value), key=f"val_{i}")
 
                 col4, col5, col6 = st.columns(3)
-                agg_options = ["", "sum", "count", "average", "max", "percentage_of_total", "ratio", "distinct_count", "days_since_first"]
+                agg_options = ["", "sum", "count", "average", "max", "percentage_of_total", "ratio", "distinct_count", "shared_distinct_count", "days_since_first"]
                 agg = col4.selectbox(
                     "Aggregation",
                     agg_options,
@@ -192,6 +192,43 @@ def render():
                     filter_op = ""
                     filter_val_raw = ""
 
+                # Group-by field
+                if agg:
+                    st.caption("Group by (optional) — evaluates the condition per distinct value of this attribute (e.g. recipient_id, account_id)")
+                    gcol1, gcol2 = st.columns(2)
+                    group_by_val = gcol1.text_input(
+                        "Group by attribute",
+                        value=cond.group_by or "",
+                        placeholder="e.g. recipient_id, account_id",
+                        key=f"groupby_{i}",
+                    )
+                    if group_by_val.strip():
+                        group_mode_val = gcol2.selectbox(
+                            "Group mode",
+                            ["any", "all"],
+                            index=0 if (cond.group_mode or "any") == "any" else 1,
+                            help='"any" = alert if at least one group fires; "all" = alert only if every group fires',
+                            key=f"gmode_{i}",
+                        )
+                    else:
+                        group_mode_val = "any"
+                else:
+                    group_by_val = ""
+                    group_mode_val = "any"
+
+                # Link attribute — shown only for shared_distinct_count
+                if agg == "shared_distinct_count":
+                    st.caption("Link attribute(s) — comma-separated; senders sharing ANY of these are counted (OR semantics)")
+                    link_attr_raw = st.text_input(
+                        "Link attribute(s)",
+                        value=", ".join(cond.link_attribute or []),
+                        placeholder="e.g. email, phone, device_id",
+                        key=f"linkattr_{i}",
+                    )
+                    link_attribute_val = [a.strip() for a in link_attr_raw.split(",") if a.strip()] or None
+                else:
+                    link_attribute_val = None
+
                 parsed_val = _parse(val)
                 parsed_filter_val = _parse(filter_val_raw) if filter_val_raw.strip() else None
 
@@ -205,6 +242,9 @@ def render():
                     filter_attribute=filter_attr.strip() if filter_attr.strip() else None,
                     filter_operator=filter_op if filter_op else None,
                     filter_value=parsed_filter_val,
+                    group_by=group_by_val.strip() if group_by_val.strip() else None,
+                    group_mode=group_mode_val,
+                    link_attribute=link_attribute_val,
                 ))
 
     rule.conditions = updated_conditions

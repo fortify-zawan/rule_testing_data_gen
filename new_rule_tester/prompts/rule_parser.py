@@ -98,7 +98,39 @@ TIER 2 (derived) — use when the condition compares two independently computed 
   → DA[0] = numerator or left operand (more recent or "target" quantity).
   → DA[1] = denominator or right operand (baseline or "reference" quantity).
 
-### STEP 5: Normalization
+### STEP 5b: Detect SHARED ATTRIBUTE (link_attribute — cross-entity relationship)
+If the rule requires senders/accounts to **share a PII or identifying attribute** with at least one other entity:
+- Use `aggregation: "shared_distinct_count"` (NOT `"distinct_count"`)
+- Set `link_attribute` to a JSON list of the shared attributes (e.g. `["email", "phone"]`)
+- Set `attribute` to the primary entity being counted (e.g. `"user_id"`)
+- Combine with `group_by` if the rule also scopes per recipient/account
+
+Signal phrases: "share email/phone", "same email address", "linked accounts", "using the same PII",
+"common identifier", "same device", "matching phone number", "share a phone number", "share an email"
+
+Example: "senders who share email or phone" → aggregation=shared_distinct_count, attribute=user_id,
+link_attribute=["email","phone"]
+
+**If no sharing language**: use `distinct_count` as normal — do NOT add link_attribute.
+
+### STEP 5: Detect GROUP BY (CRITICAL for per-entity rules)
+If the rule evaluates a condition **per entity** — not across all transactions globally — add `group_by` and `group_mode` to the condition.
+
+**When to set group_by:**
+- Phrases like "per recipient", "for each sender", "by account", "there's a recipient where...",
+  "any account that...", "accounts where..." indicate that the aggregation should be computed
+  per distinct value of an entity attribute.
+- Set `group_by` to the entity attribute (e.g. `"recipient_id"`, `"account_id"`, `"user_id"`).
+
+**group_mode — infer from description:**
+- `"any"` (default): "there's a recipient where...", "any account that...", "at least one sender who...",
+  "a customer where..." → rule fires if AT LEAST ONE group satisfies the condition.
+- `"all"`: "all recipients where...", "every account that...", "each sender must..." → rule fires only
+  if EVERY group satisfies the condition.
+
+**If no per-entity language**: omit both fields (they default to null / "any").
+
+### STEP 6: Normalization
 - Strip currency symbols (e.g., "$1000" -> 1000).
 - Convert percentages (e.g., "10%") to decimals (0.10).
 - Maintain exact string casing for countries (e.g., "Iran" stays "Iran", never "IR").
@@ -120,6 +152,9 @@ TIER 2 (derived) — use when the condition compares two independently computed 
       "filter_attribute": null | <canonical_field_name>,
       "filter_operator": null | <operator>,
       "filter_value": null | <value or list>,
+      "group_by": null | <canonical_field_name>,
+      "group_mode": "any" | "all",
+      "link_attribute": null | ["<canonical_field>", ...],
       "derived_attributes": null | [
         {{
           "name": "<short_label e.g. iran_7d_count>",
@@ -400,6 +435,73 @@ Output:
     }}
   ],
   "raw_expression": "difference(inbound_30d_sum - outbound_30d_sum) > 5000",
+  "high_risk_countries": []
+}}
+
+Example 11 — Behavioral: GROUP BY (per-entity aggregation, "any" group fires)
+Description: "Alert if there's a recipient where they received money from more than 3 distinct senders in the last 30 days"
+Reasoning:
+  "there's a recipient where" → per-entity evaluation, group_by=recipient_id, group_mode="any"
+  distinct senders per recipient → aggregation=distinct_count, attribute=user_id, window=30d
+  Rule fires if AT LEAST ONE recipient has > 3 distinct senders (max group value > threshold).
+Output:
+{{
+  "rule_type": "behavioral",
+  "relevant_attributes": ["recipient_id", "user_id"],
+  "conditions": [
+    {{
+      "attribute": "user_id",
+      "operator": ">",
+      "value": 3,
+      "aggregation": "distinct_count",
+      "window": "30d",
+      "logical_connector": "AND",
+      "filter_attribute": null,
+      "filter_operator": null,
+      "filter_value": null,
+      "group_by": "recipient_id",
+      "group_mode": "any",
+      "derived_attributes": null,
+      "derived_expression": null,
+      "window_mode": null
+    }}
+  ],
+  "raw_expression": "distinct_count(user_id) > 3 GROUP BY recipient_id WITHIN 30d (any group fires)",
+  "high_risk_countries": []
+}}
+
+Example 12 — Behavioral: GROUP BY + SHARED PII (shared_distinct_count with link_attribute)
+Description: "Alert if there's a recipient where multiple senders share an email or phone within 30 days"
+Reasoning:
+  "share email or phone" → cross-entity relationship → aggregation=shared_distinct_count, link_attribute=["email","phone"]
+  "multiple senders" → primary entity being counted = user_id
+  "there's a recipient where" → per-entity scope → group_by=recipient_id, group_mode="any"
+  "within 30 days" → window=30d
+  "multiple" = more than 1 → operator=>, value=1
+Output:
+{{
+  "rule_type": "behavioral",
+  "relevant_attributes": ["recipient_id", "user_id", "email", "phone"],
+  "conditions": [
+    {{
+      "attribute": "user_id",
+      "operator": ">",
+      "value": 1,
+      "aggregation": "shared_distinct_count",
+      "window": "30d",
+      "logical_connector": "AND",
+      "filter_attribute": null,
+      "filter_operator": null,
+      "filter_value": null,
+      "group_by": "recipient_id",
+      "group_mode": "any",
+      "link_attribute": ["email", "phone"],
+      "derived_attributes": null,
+      "derived_expression": null,
+      "window_mode": null
+    }}
+  ],
+  "raw_expression": "shared_distinct_count(user_id via email|phone) > 1 GROUP BY recipient_id WITHIN 30d",
   "high_risk_countries": []
 }}
 

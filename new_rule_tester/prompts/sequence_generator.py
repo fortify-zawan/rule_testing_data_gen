@@ -80,7 +80,22 @@ Think step by step:
    Plan the final background transaction date first, then place filter-matching motif transactions
    within the correct window relative to that anchor date. Do NOT mix up which transactions go
    in which window — a "recent 7d" transaction must be within 7 days of the last transaction.
-4. What does a realistic background for this account type look like?
+4. If any condition has a `group_by` attribute (e.g. group_by=recipient_id): the aggregate is
+   evaluated independently for each distinct group value. Generate transactions with at least
+   2–3 distinct values of the group_by attribute.
+   - For RISKY: concentrate enough motif transactions in ONE group so that group alone crosses
+     the threshold. Other groups should stay below the threshold for realism.
+   - For GENUINE: ensure NO single group accumulates enough to cross the threshold — spread
+     motif transactions across multiple groups.
+5. If any condition uses `shared_distinct_count` (the raw_expression contains "shared_distinct_count"
+   or mentions "share email/phone" or similar):
+   - For RISKY: generate ≥2 distinct user_ids in the target recipient group with the SAME value
+     for at least one of the link attributes (e.g. user_A and user_B both have email="shared@x.com").
+     Other recipient groups should have senders with unique PII — no unintended sharing.
+   - For GENUINE: ensure every user_id in EVERY recipient group has a UNIQUE value for ALL link
+     attributes — no two senders share email, phone, or any other link attribute.
+   - Always include the link attribute fields (e.g. email, phone) in every transaction's attributes.
+6. What does a realistic background for this account type look like?
 The rule fires on AGGREGATES — individual transactions should reflect real account history,
 not a direct demonstration of the rule.
 
@@ -158,6 +173,13 @@ would push the sequence away from that outcome?
 
   RISKY   → conflict = instruction makes it harder or impossible for the rule to FIRE
   GENUINE → conflict = instruction makes it more likely for the rule to FIRE
+
+IMPORTANT — for RATIO conditions with non-overlapping windows (recent period / prior period):
+  The rule fires when RECENT aggregate / PRIOR aggregate > threshold.
+  Reducing the PRIOR period (denominator) → ratio goes UP → HELPS risky fire → NOT a conflict.
+  Increasing the PRIOR period (denominator) → ratio goes DOWN → HURTS risky → IS a conflict.
+  Reducing the RECENT period (numerator)   → ratio goes DOWN → HURTS risky → IS a conflict.
+  Think carefully about which time period an instruction affects before flagging it.
 
 Flag only clear directional conflicts — where following the instruction would materially
 prevent the expected validation outcome. Ignore style preferences, realism guidance, or
