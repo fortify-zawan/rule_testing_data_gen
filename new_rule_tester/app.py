@@ -41,6 +41,27 @@ with st.sidebar:
         else:
             st.markdown(f"&nbsp;&nbsp;&nbsp;{label}")
 
+    # ── Settings ──────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("**Settings**")
+    api_key_input = st.text_input(
+        "Anthropic API Key",
+        value=st.session_state.get("api_key", ""),
+        type="password",
+        placeholder="sk-ant-...",
+        help="Paste your Anthropic API key here. Overrides the ANTHROPIC_API_KEY env variable.",
+    )
+    if api_key_input != st.session_state.get("api_key", ""):
+        st.session_state.api_key = api_key_input
+        st.rerun()
+
+    if st.session_state.get("api_key"):
+        st.caption("✓ API key set")
+    elif os.environ.get("ANTHROPIC_API_KEY"):
+        st.caption("✓ Using env variable")
+    else:
+        st.caption("⚠ No API key configured")
+
     # Show generation status log if present
     if st.session_state.status_log:
         st.markdown("---")

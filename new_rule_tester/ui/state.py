@@ -6,6 +6,7 @@ def init_state():
     """Initialise all session state keys with defaults on first load."""
     defaults = {
         "step": "rule_input",       # rule_input | prototype_review | test_case_builder | test_suite
+        "api_key": "",              # Anthropic API key (set via Settings in sidebar)
         "rule": None,               # domain.models.Rule
         "risky_proto": None,        # domain.models.Prototype
         "genuine_proto": None,      # domain.models.Prototype
