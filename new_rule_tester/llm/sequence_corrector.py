@@ -666,7 +666,7 @@ def correct_behavioral_sequence(
     )
 
     log.debug("corrector | repair_guidance_section present: %s", bool(repair_guidance_section))
-    data = call_llm_json(prompt, system=SYSTEM)
+    data = call_llm_json(prompt, system=SYSTEM) #, model="claude-sonnet-4-6"
 
     # Validate that the LLM returned a delta dict with at least one of add/modify
     if not isinstance(data, dict) or ("add" not in data and "modify" not in data):

@@ -138,7 +138,7 @@ def generate_behavioral_sequence(
         feedback_section=feedback_section,
     ) + conflict_section
 
-    data = call_llm_json(prompt, system=SYSTEM)
+    data = call_llm_json(prompt, system=SYSTEM) #, model="claude-sonnet-4-6"
 
     if isinstance(data, list):
         raw_txns, conflict_dicts = data, []

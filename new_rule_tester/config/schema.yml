@@ -37,12 +37,16 @@ transaction_attributes:
 
   send_country_code:
     type: categorical
-    description: Country of the sender — use full country name (e.g. "United Kingdom", "United States")
+    description: >
+      Origin country — the country FROM which the sender is sending money (i.e. where the sender is located).
+      NOT the sender's nationality. Use full country name (e.g. "United Kingdom", "United States").
     aliases: [send_country, from_country, origin_country, sender_country]
 
   receive_country_code:
     type: categorical
-    description: Country of the recipient — use full country name exactly as stated in the rule (e.g. "Iran", "North Korea")
+    description: >
+      Destination country — the country TO which the money is being sent (i.e. where the recipient is located).
+      Use full country name exactly as stated in the rule (e.g. "Iran", "North Korea").
     aliases: [receive_country, to_country, destination_country, recipient_country, beneficiary_country, country]
 
   payin_method:
@@ -175,10 +179,10 @@ recipient_attributes:
     description: Whether the recipient is a known relation of the sender
     aliases: [related_party, related_to_sender]
   
-  recipiemt_nationality_code:
+  recipient_nationality_code:
     type: categorical
     description: Nationality of the recipient — use full country name (e.g. "Iranian", "British")
-    aliases: [ recipient_nationality, recipient_country]
+    aliases: [recipiemt_nationality_code, recipient_nationality, recipient_country]
   
   recipient_name:
     type: categorical

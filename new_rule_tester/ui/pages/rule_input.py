@@ -416,13 +416,11 @@ def render():
 
     st.divider()
     if st.button("Confirm and Continue", type="primary"):
-        # TODO: suggestion generation temporarily disabled for testing
-        # with st.spinner("Analysing rule for edge case suggestions..."):
-        #     try:
-        #         st.session_state.suggestions = generate_suggestions(rule)
-        #     except Exception:
-        #         st.session_state.suggestions = []
-        st.session_state.suggestions = []
+        with st.spinner("Analysing rule for edge case suggestions..."):
+            try:
+                st.session_state.suggestions = generate_suggestions(rule)
+            except Exception:
+                st.session_state.suggestions = []
         if rule.rule_type == "stateless":
             go_to("prototype_review")
         else:

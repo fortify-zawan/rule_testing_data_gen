@@ -28,6 +28,8 @@ _PATTERN_LABEL = {
     "or_branch_trigger":     "OR branch — one path triggers",
     "or_branch_all_fail":    "OR branch — all paths fail",
     "window_edge_inside":    "Window edge — inside",
+    "window_edge_outside":   "Window edge — outside",
+    "filter_partial_match":  "Filter — partial match",
     "filter_empty":          "Filter empty",
 }
 
@@ -70,7 +72,6 @@ def _render_suggestions_content(rule: Rule):
             if st.button("Use this suggestion", key=f"use_proto_{s.id}", use_container_width=True):
                 st.session_state.prefill_proto_scenario_type = s.scenario_type
                 st.session_state.prefill_proto_intent = s.suggested_intent
-                # Reset the draft for that type so the auto-generation triggers
                 _reset_draft(s.scenario_type)
                 st.rerun()
 
