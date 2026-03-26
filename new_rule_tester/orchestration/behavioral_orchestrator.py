@@ -4,6 +4,8 @@ Coordinates:
   1. Internal generation + validation loop (Loop B) — runs silently before user sees anything.
   2. Accepts user feedback and reruns the loop (Loop C entry point).
 """
+import json
+
 from domain.models import BehavioralTestCase, Rule, Transaction
 from llm.sequence_corrector import correct_behavioral_sequence
 from llm.sequence_generator import generate_behavioral_sequence
@@ -13,69 +15,6 @@ from validation.rule_engine import evaluate_behavioral_sequence
 log = get_logger(__name__)
 
 MAX_ATTEMPTS = 4  # 4 validation passes = 3 real correction attempts before giving up
-
-
-# ── Realism checks (soft gates) ───────────────────────────────────────────────
-
-def _check_motif_dominance(transactions: list[Transaction], rule: Rule) -> str | None:
-    """Return a warning if rule-relevant (motif) transactions dominate the sequence."""
-    if not transactions:
-        return None
-    for cond in rule.conditions:
-        if cond.filter_attribute and cond.filter_value is not None:
-            filter_val = str(cond.filter_value).lower()
-            matching = sum(
-                1 for t in transactions
-                if str(t.attributes.get(cond.filter_attribute, "")).lower() == filter_val
-            )
-            ratio = matching / len(transactions)
-            if ratio > 0.5:
-                return (
-                    f"Realism warning: {matching}/{len(transactions)} transactions match "
-                    f"{cond.filter_attribute}={cond.filter_value!r} — motif is too dominant "
-                    f"({ratio:.0%}). Add more background transactions with different destinations/values."
-                )
-    return None
-
-
-def _check_threshold_clustering(transactions: list[Transaction], rule: Rule) -> str | None:
-    """Return a warning if numeric amounts cluster tightly around a rule threshold."""
-    if not transactions:
-        return None
-    for cond in rule.conditions:
-        if not isinstance(cond.value, (int, float)):
-            continue
-        threshold = float(cond.value)
-        if threshold == 0:
-            continue
-        amounts = [
-            float(t.attributes[cond.attribute])
-            for t in transactions
-            if cond.attribute in t.attributes
-            and isinstance(t.attributes[cond.attribute], (int, float))
-        ]
-        if len(amounts) < 3:
-            continue
-        near = sum(1 for a in amounts if abs(a - threshold) / threshold < 0.1)
-        if near / len(amounts) > 0.6:
-            return (
-                f"Realism warning: {near}/{len(amounts)} values of {cond.attribute!r} "
-                f"are within 10% of the threshold ({threshold}). "
-                f"Vary amounts more naturally — spread them above and below."
-            )
-    return None
-
-
-def _collect_realism_warnings(transactions: list[Transaction], rule: Rule) -> str:
-    """Run both realism checks and return a combined warning string (empty if all clear)."""
-    warnings = []
-    w1 = _check_motif_dominance(transactions, rule)
-    w2 = _check_threshold_clustering(transactions, rule)
-    if w1:
-        warnings.append(w1)
-    if w2:
-        warnings.append(w2)
-    return "\n".join(warnings)
 
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
@@ -110,7 +49,6 @@ def run(
     # Build previous aggregates context for the generator
     prev_agg_json = ""
     if previous_case:
-        import json
         prev_agg_json = json.dumps(previous_case.computed_aggregates, indent=2)
 
     log.info(
@@ -138,16 +76,10 @@ def run(
         status("\n".join(lines))
         log.warning("orchestrator | feedback conflicts detected: %s", conflict_dicts)
 
-    # Internal loop B
+    # Internal loop B — aggregate validation and correction only
     for attempt in range(MAX_ATTEMPTS):
         status(f"Validating aggregates (attempt {attempt + 1})...")
         validation_result, aggregates = evaluate_behavioral_sequence(rule, transactions, scenario_type)
-
-        # Run realism checks regardless of validation outcome — warnings feed into next correction
-        realism_warnings = _collect_realism_warnings(transactions, rule)
-        if realism_warnings:
-            status(f"Realism check: {realism_warnings}")
-            log.warning("orchestrator | realism warning on attempt %d: %s", attempt + 1, realism_warnings)
 
         if validation_result.passed:
             status("Sequence passed validation.")
@@ -165,11 +97,6 @@ def run(
             status(f"Correcting sequence — attempt {attempt + 1}...")
             log.info("orchestrator | starting correction attempt %d/%d", attempt + 1, MAX_ATTEMPTS - 1)
             failed_conditions = [r for r in validation_result.condition_results if not r.passed]
-            import json
-            corrector_intent = intent
-            if realism_warnings:
-                corrector_intent = (intent + "\n\nAdditional realism constraints:\n" + realism_warnings).strip()
-            # Pass full feedback history so corrector also respects all prior user instructions
             corrector_history = prior_feedback + ([user_feedback] if user_feedback else [])
             transactions = correct_behavioral_sequence(
                 rule=rule,
@@ -177,7 +104,7 @@ def run(
                 transactions=transactions,
                 aggregates=aggregates,
                 failed_conditions=failed_conditions,
-                intent=corrector_intent,
+                intent=intent,
                 feedback_history=corrector_history,
             )
         else:

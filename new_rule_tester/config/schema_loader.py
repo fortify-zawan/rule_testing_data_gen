@@ -118,11 +118,15 @@ def normalize_country_values(attrs: dict, high_risk_countries: list[str] | None 
 
 # ── Prompt formatting ─────────────────────────────────────────────────────────
 
-def format_attributes_for_prompt(show_aliases: bool = True) -> str:
+def format_attributes_for_prompt(
+    show_aliases: bool = True,
+    allowed_attrs: set[str] | None = None,
+) -> str:
     """
     Returns a compact attribute reference table for injecting into LLM prompts.
     Groups by entity type and shows canonical name, type, and common aliases.
     Set show_aliases=False for generation prompts where aliases cause key confusion.
+    Pass allowed_attrs to restrict the table to only those canonical names.
     """
     schema = _load()
     lines = ["CANONICAL ATTRIBUTE SCHEMA (use ONLY these exact names as JSON keys — do not use aliases or invent others):"]
@@ -133,6 +137,8 @@ def format_attributes_for_prompt(show_aliases: bool = True) -> str:
         ("recipient_attributes", "Recipient"),
     ]:
         attrs = schema.get(section, {})
+        if allowed_attrs is not None:
+            attrs = {k: v for k, v in attrs.items() if k in allowed_attrs}
         if not attrs:
             continue
         lines.append(f"\n{label} attributes:")
@@ -142,7 +148,12 @@ def format_attributes_for_prompt(show_aliases: bool = True) -> str:
                 alias_str = f" (also known as: {aliases})" if aliases else ""
             else:
                 alias_str = ""
-            lines.append(f"  {name} [{meta['type']}]{alias_str} — {meta['description']}")
+            allowed = meta.get("allowed_values")
+            if allowed:
+                value_str = f" ALLOWED VALUES (use ONLY these): {' | '.join(str(v) for v in allowed)}"
+            else:
+                value_str = f" — {meta['description']}"
+            lines.append(f"  {name} [{meta['type']}]{alias_str}{value_str}")
 
     return "\n".join(lines)
 

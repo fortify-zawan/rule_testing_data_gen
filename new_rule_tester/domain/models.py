@@ -6,6 +6,21 @@ from typing import Any
 
 
 @dataclass
+class FilterClause:
+    """One filter predicate applied to a transaction before aggregation.
+
+    If value_field is set, the RHS is resolved from transaction.attributes[value_field]
+    (cross-field comparison). Otherwise value is used as a literal RHS.
+    connector specifies how this clause chains to the NEXT clause (AND/OR); ignored on the last clause.
+    """
+    attribute: str                  # LHS canonical attribute name
+    operator: str                   # >, <, >=, <=, ==, !=, in, not_in
+    value: Any = None               # literal RHS value; ignored when value_field is set
+    value_field: str | None = None  # RHS attribute name for cross-field comparison
+    connector: str = "AND"          # how this clause chains to the NEXT; ignored on last
+
+
+@dataclass
 class DerivedAttr:
     """One named intermediate computed value for a Tier 2 (derived) condition.
 
@@ -15,10 +30,56 @@ class DerivedAttr:
     name: str                          # short label, e.g. "iran_7d_count"
     aggregation: str                   # "count", "sum", "average", "max"
     attribute: str                     # canonical schema field; use "transaction_id" for count
-    window: str | None = None       # e.g. "7d", "30d"
-    filter_attribute: str | None = None
-    filter_operator: str | None = None
-    filter_value: Any | None = None
+    window: str | None = None          # e.g. "7d", "30d"
+    filters: list[FilterClause] | None = None  # list of filter clauses (AND/OR chained)
+
+
+@dataclass
+class ComputedAttr:
+    """A named intermediate value computed from a transaction sequence before condition evaluation.
+
+    Defined at the Rule level so multiple conditions can reference it by name.
+    The engine computes all ComputedAttrs once (in order) before evaluating any condition.
+
+    All CAs inject their computed value into t.attributes[name] so later CAs can
+    reference them in filters. Comparisons always live on conditions or filters — never
+    baked into the CA itself.
+
+    Three output modes:
+
+      Scalar (group_by=None, derived_from=None):
+        aggregation(attribute)[window] over filtered transactions → one value.
+        Stored in aggregates[name] and injected into every t.attributes[name].
+        Example: avg(send_amount)[30d] where country=Kenya → 342.5
+
+      Group (group_by set):
+        aggregation(attribute) computed per distinct group value in the windowed subset.
+        The raw per-group aggregate is injected into each t.attributes[name].
+        Later CA filters compare directly: e.g. {attribute: is_new_recipient, op: ==, value: 1}.
+        Example: count(transaction_id) group_by=recipient_id
+          → t.attributes["is_new_recipient"] = 1 for first-time recipients, 2 for second, etc.
+
+      Derived (derived_from set, aggregation="ratio" or "difference"):
+        Combines two previously computed scalar CAs using arithmetic.
+        aggregation="ratio"      → derived_from[0] / derived_from[1]
+        aggregation="difference" → derived_from[0] - derived_from[1]
+        attribute/window/filters/group_by are ignored.
+        Stored in aggregates[name] and injected into all t.attributes[name].
+
+    CAs are computed in declaration order; later CAs can reference earlier CA names in
+    their filters or derived_from (since earlier CAs have already injected their values).
+    """
+    name: str                              # label used as key in aggregates and t.attributes
+    aggregation: str                       # count, sum, average, max, age_years, distinct_count,
+                                           # shared_distinct_count, days_since_first,
+                                           # ratio, difference (last two for derived mode only)
+    attribute: str                         # canonical schema attribute; ignored in derived mode
+    filters: list[FilterClause] | None = None  # optional pre-aggregation filter (can ref earlier CA names)
+    group_by: str | None = None            # if set: inject per-group aggregate into t.attributes[name]
+    window: str | None = None             # CA's own window, applied independently (e.g. "30d", "7d")
+    window_exclude: str | None = None     # if set, restrict to (latest−window) ≤ date < (latest−window_exclude)
+    derived_from: list[str] | None = None  # derived mode: names of exactly 2 earlier scalar CAs
+    link_attribute: list[str] | None = None  # shared_distinct_count only: PII/link attrs (OR semantics)
 
 
 @dataclass
@@ -31,9 +92,7 @@ class RuleCondition:
     logical_connector: str = "AND"      # AND or OR (how this connects to the NEXT condition)
     # For percentage_of_total, ratio (Pattern A), and filtered count:
     # defines which subset of transactions to compute over.
-    filter_attribute: str | None = None
-    filter_operator: str | None = None
-    filter_value: Any | None = None
+    filters: list[FilterClause] | None = None  # list of filter clauses (AND/OR chained)
     group_by: str | None = None         # attribute to partition by before aggregating (e.g. "recipient_id")
     group_mode: str = "any"             # "any" = at least one group fires; "all" = every group must fire
     link_attribute: list[str] | None = None  # shared_distinct_count: attributes defining the "connection"
@@ -45,9 +104,22 @@ class RuleCondition:
     derived_attributes: list[DerivedAttr] | None = None
     derived_expression: str | None = None   # "ratio" | "difference"
     window_mode: str | None = None          # "non_overlapping" | "independent" (Tier 2 only)
+    condition_group: int = 0
+    # Conditions sharing a group number are evaluated together using logical_connector.
+    # Groups are combined in ascending order using condition_group_connector.
+    condition_group_connector: str = "OR"
+    # How THIS group's result connects to the NEXT group's result.
+    # Read from the FIRST condition in each group; all others in the group should leave this at default "OR".
+    # "OR" (default) or "AND". Irrelevant for the last group.
+    computed_attr_name: str | None = None
+    # If set, this condition evaluates aggregates[computed_attr_name] operator value.
+    # All aggregation/attribute/window/filters fields are ignored — the value is pre-computed
+    # by a ComputedAttr in rule.computed_attrs. This is the preferred path for new rules.
 
     def aggregate_key(self) -> str:
         """Consistent key for the aggregates dict, used by both compute and engine."""
+        if self.computed_attr_name:
+            return self.computed_attr_name
         if self.derived_attributes:
             names = "/".join(da.name for da in self.derived_attributes)
             return f"{self.derived_expression or 'derived'}({names})"
@@ -68,6 +140,11 @@ class Rule:
     conditions: list[RuleCondition]
     raw_expression: str         # human-readable summary of rule logic
     high_risk_countries: list[str] = field(default_factory=list)
+    computed_attrs: list[ComputedAttr] = field(default_factory=list)
+    # Named intermediate values computed from the transaction sequence before condition evaluation.
+    # Scalar CAs store their value in aggregates[name] and inject it into all t.attributes[name].
+    # Boolean CAs (group_by set) inject True/False per transaction into t.attributes[name].
+    # Computed in declaration order; conditions reference them via computed_attr_name or FilterClause.
 
 
 @dataclass

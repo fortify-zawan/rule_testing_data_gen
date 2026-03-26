@@ -5,7 +5,7 @@ User can edit the parsed output before proceeding.
 """
 import streamlit as st
 
-from domain.models import Rule, RuleCondition
+from domain.models import FilterClause, Rule, RuleCondition
 from llm.rule_parser import parse_rule
 from llm.suggestion_generator import generate_suggestions
 from ui.state import go_to
@@ -35,6 +35,7 @@ def render():
                 st.session_state.prefill_scenario_type = None
                 st.session_state.prefill_intent = None
                 st.session_state.prefill_expected_outcome = None
+                st.session_state.filter_clauses = {}  # reset per-condition filter state
             except Exception as e:
                 st.error(f"Failed to parse rule: {e}")
                 return
@@ -78,6 +79,9 @@ def render():
     st.markdown("**Conditions**")
     updated_conditions = []
 
+    if "filter_clauses" not in st.session_state:
+        st.session_state.filter_clauses = {}
+
     # Parse value back — try numeric, fall back to string/list
     import ast
 
@@ -87,18 +91,40 @@ def render():
         except Exception:
             return raw
 
+    # Pre-compute which condition index is the first in each group (for connector display)
+    _first_in_group: set[int] = set()
+    _seen_groups: set[int] = set()
     for i, cond in enumerate(rule.conditions):
-        cond_label = cond.aggregate_key() if cond.derived_attributes else f"{cond.attribute} {cond.aggregation or ''}"
+        gid = cond.condition_group or 0
+        if gid not in _seen_groups:
+            _first_in_group.add(i)
+            _seen_groups.add(gid)
+
+    for i, cond in enumerate(rule.conditions):
+        if cond.computed_attr_name:
+            cond_label = cond.computed_attr_name
+        elif cond.derived_attributes:
+            cond_label = cond.aggregate_key()
+        else:
+            cond_label = f"{cond.attribute} {cond.aggregation or ''}"
         with st.expander(f"Condition {i + 1}: {cond_label} {cond.operator} {cond.value}", expanded=True):
 
             if cond.derived_attributes is not None:
                 # ── Tier 2 derived condition: read-only summary + editable operator/value ──
                 st.caption("Derived condition — computed from named intermediate attributes")
                 for da in cond.derived_attributes:
-                    da_filter = (
-                        f", filter: {da.filter_attribute} {da.filter_operator} {da.filter_value}"
-                        if da.filter_attribute else ""
-                    )
+                    if da.filters:
+                        parts = []
+                        for k, fc in enumerate(da.filters):
+                            if fc.value_field:
+                                parts.append(f"{fc.attribute} {fc.operator} field({fc.value_field})")
+                            else:
+                                parts.append(f"{fc.attribute} {fc.operator} {fc.value}")
+                            if k < len(da.filters) - 1:
+                                parts.append(fc.connector)
+                        da_filter = ", filter: " + " ".join(parts)
+                    else:
+                        da_filter = ""
                     st.markdown(
                         f"- **{da.name}** = `{da.aggregation}({da.attribute})`"
                         f"{', window=' + da.window if da.window else ''}{da_filter}"
@@ -124,6 +150,28 @@ def render():
                     key=f"conn_{i}",
                 )
 
+                # Condition group fields
+                st.caption("Condition group — use to express (A AND B) OR (C AND D) style logic")
+                gcol1, gcol2 = st.columns(2)
+                cg_val = gcol1.number_input(
+                    "Condition group",
+                    min_value=0, step=1,
+                    value=cond.condition_group or 0,
+                    help="Conditions sharing a group number are evaluated together. Default 0 = flat evaluation.",
+                    key=f"cg_{i}",
+                )
+                if i in _first_in_group:
+                    cgc_val = gcol2.selectbox(
+                        "Group connector to next group",
+                        ["OR", "AND"],
+                        index=0 if (cond.condition_group_connector or "OR").upper() == "OR" else 1,
+                        help='How this group\'s result connects to the next group. Only set on the first condition of each group.',
+                        key=f"cgc_{i}",
+                    )
+                else:
+                    gcol2.caption("Group connector set on first condition of this group")
+                    cgc_val = cond.condition_group_connector or "OR"
+
                 parsed_val = _parse(val)
                 updated_conditions.append(RuleCondition(
                     attribute=cond.attribute,
@@ -133,12 +181,18 @@ def render():
                     derived_attributes=cond.derived_attributes,
                     derived_expression=cond.derived_expression,
                     window_mode=cond.window_mode,
+                    condition_group=int(cg_val),
+                    condition_group_connector=cgc_val,
                 ))
 
             else:
                 # ── Tier 1 simple condition: fully editable ────────────────────────────
                 col1, col2, col3 = st.columns(3)
-                attr = col1.text_input("Attribute", value=cond.attribute or "", key=f"attr_{i}")
+                if cond.computed_attr_name:
+                    col1.text_input("Computed Attr", value=cond.computed_attr_name, key=f"attr_{i}", disabled=True)
+                    attr = None
+                else:
+                    attr = col1.text_input("Attribute", value=cond.attribute or "", key=f"attr_{i}")
                 op = col2.selectbox(
                     "Operator",
                     [">", "<", ">=", "<=", "==", "!=", "in", "not_in"],
@@ -150,7 +204,7 @@ def render():
                 val = col3.text_input("Value", value=str(cond.value), key=f"val_{i}")
 
                 col4, col5, col6 = st.columns(3)
-                agg_options = ["", "sum", "count", "average", "max", "percentage_of_total", "ratio", "distinct_count", "shared_distinct_count", "days_since_first"]
+                agg_options = ["", "sum", "count", "average", "max", "percentage_of_total", "ratio", "distinct_count", "shared_distinct_count", "days_since_first", "age_years"]
                 agg = col4.selectbox(
                     "Aggregation",
                     agg_options,
@@ -170,27 +224,83 @@ def render():
                     key=f"conn_{i}",
                 )
 
-                # Filter fields — shown for all aggregations
+                # Filter clauses — multi-clause, shown for all aggregations
                 if agg:
-                    st.caption("Filter (optional) — restricts which transactions are included in this aggregation (e.g. country = Iran)")
-                    col7, col8, col9 = st.columns(3)
-                    filter_attr = col7.text_input("Filter attribute", value=cond.filter_attribute or "", key=f"fattr_{i}")
-                    filter_op_options = ["", ">", "<", ">=", "<=", "==", "!=", "in", "not_in"]
-                    filter_op = col8.selectbox(
-                        "Filter operator",
-                        filter_op_options,
-                        index=filter_op_options.index(cond.filter_operator) if cond.filter_operator in filter_op_options else 0,
-                        key=f"fop_{i}",
-                    )
-                    filter_val_raw = col9.text_input(
-                        "Filter value",
-                        value=str(cond.filter_value) if cond.filter_value is not None else "",
-                        key=f"fval_{i}",
-                    )
-                else:
-                    filter_attr = ""
-                    filter_op = ""
-                    filter_val_raw = ""
+                    # Initialise from parsed condition on first render
+                    if i not in st.session_state.filter_clauses:
+                        if cond.filters:
+                            st.session_state.filter_clauses[i] = [
+                                {
+                                    "attribute": fc.attribute,
+                                    "operator": fc.operator,
+                                    "value": str(fc.value) if fc.value is not None else "",
+                                    "value_field": fc.value_field or "",
+                                    "cross_field": bool(fc.value_field),
+                                    "connector": fc.connector,
+                                }
+                                for fc in cond.filters
+                            ]
+                        else:
+                            st.session_state.filter_clauses[i] = []
+
+                    st.caption("Filters (optional) — restricts which transactions are included; add multiple clauses for compound conditions")
+                    _op_opts = ["", ">", "<", ">=", "<=", "==", "!=", "in", "not_in"]
+                    clauses = st.session_state.filter_clauses[i]
+
+                    # Column header row (shown once when there are clauses)
+                    if clauses:
+                        h = st.columns([3, 1.5, 0.6, 3, 1.2])
+                        h[0].caption("Attribute")
+                        h[1].caption("Operator")
+                        h[2].caption("⇄")
+                        h[3].caption("Value  /  Compare-to field")
+                        h[4].caption("Chain")
+
+                    for j, clause in enumerate(clauses):
+                        fc_cols = st.columns([3, 1.5, 0.6, 3, 1.2])
+                        clause["attribute"] = fc_cols[0].text_input(
+                            "attr", value=clause.get("attribute", ""), key=f"fattr_{i}_{j}",
+                            placeholder="e.g. transaction_status",
+                            label_visibility="collapsed",
+                        )
+                        op_idx = _op_opts.index(clause.get("operator", "")) if clause.get("operator", "") in _op_opts else 0
+                        clause["operator"] = fc_cols[1].selectbox(
+                            "op", _op_opts, index=op_idx, key=f"fop_{i}_{j}",
+                            label_visibility="collapsed",
+                        )
+                        clause["cross_field"] = fc_cols[2].checkbox(
+                            "⇄", value=clause.get("cross_field", False), key=f"fcf_{i}_{j}",
+                            help="Toggle: compare against another field instead of a literal value",
+                        )
+                        if clause["cross_field"]:
+                            clause["value_field"] = fc_cols[3].text_input(
+                                "field", value=clause.get("value_field", ""), key=f"fvf_{i}_{j}",
+                                placeholder="e.g. recipient_name",
+                                label_visibility="collapsed",
+                            )
+                            clause["value"] = ""
+                        else:
+                            clause["value"] = fc_cols[3].text_input(
+                                "value", value=clause.get("value", ""), key=f"fval_{i}_{j}",
+                                placeholder='e.g. completed  or  ["Iran"]',
+                                label_visibility="collapsed",
+                            )
+                            clause["value_field"] = ""
+                        if j < len(clauses) - 1:
+                            clause["connector"] = fc_cols[4].selectbox(
+                                "chain", ["AND", "OR"],
+                                index=0 if clause.get("connector", "AND") == "AND" else 1,
+                                key=f"fconn_{i}_{j}",
+                                label_visibility="collapsed",
+                            )
+                        else:
+                            fc_cols[4].write("")
+
+                    if st.button("＋ Add filter", key=f"fadd_{i}"):
+                        st.session_state.filter_clauses[i].append(
+                            {"attribute": "", "operator": "==", "value": "", "value_field": "", "cross_field": False, "connector": "AND"}
+                        )
+                        st.rerun()
 
                 # Group-by field
                 if agg:
@@ -229,8 +339,52 @@ def render():
                 else:
                     link_attribute_val = None
 
+                # Condition group fields
+                st.caption("Condition group — use to express (A AND B) OR (C AND D) style logic")
+                cgcol1, cgcol2 = st.columns(2)
+                cg_val = cgcol1.number_input(
+                    "Condition group",
+                    min_value=0, step=1,
+                    value=cond.condition_group or 0,
+                    help="Conditions sharing a group number are evaluated together. Default 0 = flat evaluation.",
+                    key=f"cg_{i}",
+                )
+                if i in _first_in_group:
+                    cgc_val = cgcol2.selectbox(
+                        "Group connector to next group",
+                        ["OR", "AND"],
+                        index=0 if (cond.condition_group_connector or "OR").upper() == "OR" else 1,
+                        help='How this group\'s result connects to the next group. Only set on the first condition of each group.',
+                        key=f"cgc_{i}",
+                    )
+                else:
+                    cgcol2.caption("Group connector set on first condition of this group")
+                    cgc_val = cond.condition_group_connector or "OR"
+
+                # Build FilterClause list from session state
+                built_filters = []
+                for clause in st.session_state.filter_clauses.get(i, []):
+                    fc_attr = (clause.get("attribute") or "").strip()
+                    fc_op   = clause.get("operator") or ""
+                    if not fc_attr or not fc_op:
+                        continue
+                    if clause.get("cross_field") and clause.get("value_field", "").strip():
+                        built_filters.append(FilterClause(
+                            attribute=fc_attr, operator=fc_op,
+                            value=None, value_field=clause["value_field"].strip(),
+                            connector=clause.get("connector", "AND"),
+                        ))
+                    else:
+                        raw_v = clause.get("value", "")
+                        pv = _parse(raw_v) if str(raw_v).strip() else None
+                        if fc_op in ("in", "not_in") and pv is not None and not isinstance(pv, list):
+                            pv = [pv]
+                        built_filters.append(FilterClause(
+                            attribute=fc_attr, operator=fc_op,
+                            value=pv, value_field=None,
+                            connector=clause.get("connector", "AND"),
+                        ))
                 parsed_val = _parse(val)
-                parsed_filter_val = _parse(filter_val_raw) if filter_val_raw.strip() else None
 
                 updated_conditions.append(RuleCondition(
                     attribute=attr,
@@ -239,24 +393,36 @@ def render():
                     aggregation=agg if agg else None,
                     window=window.strip() if window.strip() else None,
                     logical_connector=connector,
-                    filter_attribute=filter_attr.strip() if filter_attr.strip() else None,
-                    filter_operator=filter_op if filter_op else None,
-                    filter_value=parsed_filter_val,
+                    filters=built_filters if built_filters else None,
                     group_by=group_by_val.strip() if group_by_val.strip() else None,
                     group_mode=group_mode_val,
                     link_attribute=link_attribute_val,
+                    condition_group=int(cg_val),
+                    condition_group_connector=cgc_val,
+                    computed_attr_name=cond.computed_attr_name,
                 ))
 
     rule.conditions = updated_conditions
     st.session_state.rule = rule
 
+    # Debug — serialized rule JSON
+    import dataclasses, json
+
+    def _rule_to_dict(r):
+        return json.loads(json.dumps(dataclasses.asdict(r), default=str))
+
+    with st.expander("Debug — parsed rule JSON"):
+        st.json(_rule_to_dict(rule))
+
     st.divider()
     if st.button("Confirm and Continue", type="primary"):
-        with st.spinner("Analysing rule for edge case suggestions..."):
-            try:
-                st.session_state.suggestions = generate_suggestions(rule)
-            except Exception:
-                st.session_state.suggestions = []
+        # TODO: suggestion generation temporarily disabled for testing
+        # with st.spinner("Analysing rule for edge case suggestions..."):
+        #     try:
+        #         st.session_state.suggestions = generate_suggestions(rule)
+        #     except Exception:
+        #         st.session_state.suggestions = []
+        st.session_state.suggestions = []
         if rule.rule_type == "stateless":
             go_to("prototype_review")
         else:

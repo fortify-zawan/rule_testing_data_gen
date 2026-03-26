@@ -26,7 +26,7 @@ You give it a rule like:
 > "Alert if total transfers to Iran in the last 30 days exceed $5,000"
 
 The app:
-1. Parses the rule into structured conditions (aggregation, window, threshold, filters)
+1. Parses the rule into structured ComputedAttrs + conditions (aggregation, window, threshold, filters, OR groups)
 2. Generates realistic transaction sequences that should — and should not — trigger the rule
 3. Validates those sequences deterministically against the rule
 4. Auto-corrects failures and shows you the results
@@ -50,46 +50,43 @@ Example: *"Sum of transfers to Iran in last 30 days > $5,000"*
 
 ---
 
-## Two condition tiers
+## How rules are represented
 
-### Tier 1 — Single aggregation
-Maps to one aggregation over one attribute, one window, one optional filter.
+### Computed attributes
 
+The rule parser extracts all intermediate quantities as named **ComputedAttrs** before any condition is evaluated. Each CA is computed once (in order) and its value is injected into every transaction's attributes so later CAs and conditions can reference it.
+
+Three CA modes:
+
+**Scalar** — one aggregate over filtered transactions in a window:
 ```
-sum(send_amount)[30d] > 5000
-  where filter: receive_country_code in ["Iran"]
-
-count(transaction_id)[7d] > 10
-
-days_since_first(created_at) < 7      ← account age check
-
-percentage_of_total(send_amount) > 0.10
-  where filter: receive_country_code in ["North Korea"]
+iran_30d_sum   = sum(send_amount)[30d]  where receive_country_code in ["Iran"]
+cash_7d_count  = count(transaction_id)[7d]  where transaction_type == "Cash"
+prior_6m_count = count(transaction_id)[6m, exclude_last=7d]   ← prior period window
 ```
 
-Supported aggregations: `sum`, `count`, `average`, `max`, `distinct_count`, `percentage_of_total`, `ratio` (Pattern A), `days_since_first`.
-
-### Tier 2 — Derived (two-aggregate comparison)
-Used when the rule compares two independently computed scalars. Triggered by any of:
-
-- **Different time windows:** "last 7 days vs prior 30 days"
-- **Different filters on the same attribute:** "cash transactions vs all transactions"
-- **Different attributes:** "inbound vs outbound"
-- **Different aggregation functions:** "max amount vs average amount"
-- **Explicit cross-comparison language:** "ratio of A to B", "exceeds by", "difference between"
-
+**Group** — aggregate computed per distinct value of a group-by attribute; the per-group result is injected back into each transaction so later filter clauses can reference it:
 ```
-ratio(iran_7d_count / iran_30d_count) > 2.0     ← recent period vs prior period
-ratio(cash_7d_count / total_7d_count) > 0.8     ← same window, different filters
-difference(inbound_30d_sum - outbound_30d_sum) > 5000
+recipient_7d_sum = sum(send_amount)[7d]  group_by=recipient_id
+# → t.attributes["recipient_7d_sum"] holds that recipient's 7d total for each txn
 ```
 
-Each Tier 2 condition has two named `DerivedAttr` sub-computations (DA[0] and DA[1]) plus a `window_mode`:
+**Derived** — combines two scalar CAs with `ratio` or `difference`:
+```
+cash_ratio = ratio(cash_7d_count / prior_6m_count)
+net_flow   = difference(inbound_30d_sum - outbound_30d_sum)
+```
 
-| `window_mode` | When to use | Engine behaviour |
-|---|---|---|
-| `non_overlapping` | "recent period vs prior period" — windows represent sequential time | DA[0] = `[latest − w0, latest]`, DA[1] = `(latest − w0 − w1, latest − w0)` — strictly sequential, no overlap |
-| `independent` | Same window length OR comparison within the same time range | Each DA applies its window independently from `latest_date` — windows can fully overlap |
+Conditions then compare a CA's value to a threshold:
+```
+iran_30d_sum > 5000
+cash_ratio > 3.0
+net_flow > 5000
+```
+
+### Filters and OR groups
+
+Each CA can have a list of `FilterClause` predicates (AND/OR chained) instead of a single filter. Conditions can be grouped into OR groups: the rule fires if **any one group** has all its conditions satisfied.
 
 ---
 
@@ -145,7 +142,7 @@ Validator (deterministic — no LLM)
       ↓ if failed (up to 3 attempts)
 Corrector (LLM)
   Input:  same schema + rule + current transactions + exact aggregate values
-          + shortfall arithmetic for Tier 2 conditions (computed by Python)
+          + shortfall arithmetic for CA-backed conditions (computed by Python)
           + preservation constraint: don't touch background transactions
   Output: repaired transaction list
   Approach: diagnostic-first — "here are the exact numbers, here is the gap, fix it"
@@ -158,36 +155,22 @@ Validator again (same deterministic logic)
 
 > **Why `MAX_ATTEMPTS = 4` gives 3 correction passes:** the loop runs 4 validation checks. On attempts 0, 1, and 2 a correction call follows a failed validation. On attempt 3 the final validation result is recorded and the loop exits without a further correction call.
 
-### Shortfall arithmetic (Tier 2 corrector)
+### Shortfall arithmetic (CA-backed corrector)
 
-For a rule like *"recent 30d cash sum > 2× prior 90d cash sum"*, the corrector receives:
+For a rule like *"recent 30d cash sum > 2× prior 90d cash sum"*, the corrector receives pre-computed guidance from Python:
 
 ```
-CURRENT COMPONENT VALUES:
-  recent_cash_sum (numerator, recent)   = 1800.0
-  prior_cash_sum  (denominator, prior)  = 2100.0
-  ratio = 0.857
-
-SHORTFALL ANALYSIS (risky must fire):
-  Required: recent_cash_sum > 2.0 × 2100.0 = 4200.00
-  Current : recent_cash_sum = 1800.0
-  Shortfall: need to ADD at least 2400.00 more to recent_cash_sum
-  → Add filter-matching transactions in the RECENT 30d period.
+COMPUTED ATTR REPAIR: cash_ratio > 2.0 [FAIL, current=0.857]
+Type: Derived CA (ratio)
+  cash_ratio = cash_7d_count / prior_6m_count
+  Current: cash_7d_count=1800.0, prior_6m_count=2100.0, cash_ratio=0.857
+  Required: cash_7d_count > 2.0 × 2100.0 = 4200.00 (with 5% buffer → aim for 4410.00)
+  Shortfall: +2610.00 needed in cash_7d_count
+  → Add filter-matching transactions in the RECENT 7d window.
   → Do NOT add filter-matching transactions to the PRIOR period — raises the denominator.
 ```
 
-This is computed by `sequence_corrector._format_derived_conditions()` from live aggregate values stored by the validator.
-
-### Realism checks (soft gates)
-
-Before deciding whether to correct, two checks run on every attempt:
-
-| Check | Trigger | Effect |
-|---|---|---|
-| Motif dominance | >50% of transactions match the rule's filter | Warning injected into corrector intent |
-| Threshold clustering | >60% of amounts within 10% of threshold | Warning injected into corrector intent |
-
-These don't fail validation — they guide the corrector to produce more realistic sequences.
+This is computed by `sequence_corrector._format_tier1_repair_guidance()` from live aggregate values stored by the validator.
 
 ### Feedback history
 
@@ -223,9 +206,10 @@ new_rule_tester/
 ├── requirements.txt
 │
 ├── domain/
-│   └── models.py                  All dataclasses: Rule, RuleCondition, DerivedAttr,
-│                                  Transaction, BehavioralTestCase, Prototype,
-│                                  TestSuggestion, ValidationResult, ConditionResult
+│   └── models.py                  All dataclasses: Rule, RuleCondition, ComputedAttr,
+│                                  DerivedAttr, FilterClause, Transaction,
+│                                  BehavioralTestCase, Prototype, TestSuggestion,
+│                                  ValidationResult, ConditionResult
 │
 ├── config/
 │   ├── schema.yml                 Canonical attribute names, types, aliases, allowed values
@@ -254,7 +238,7 @@ new_rule_tester/
 ├── orchestration/
 │   ├── stateless_orchestrator.py  Stateless: generate → validate → correct loop
 │   └── behavioral_orchestrator.py Behavioral: generate → validate → correct loop;
-│                                  realism checks; feedback history accumulation
+│                                  feedback history accumulation
 │
 ├── ui/
 │   ├── state.py                   Session state init, go_to(), log_status()
@@ -302,7 +286,7 @@ All modules use `from logging_config import get_logger`. Logs go to `logs/aml_te
 |---|---|
 | DEBUG | Full prompt text, full LLM responses, per-aggregate computed values |
 | INFO | LLM call metadata (model, chars, elapsed), rule parse result, validation pass/fail per condition, orchestrator attempt count, corrector shortfall details |
-| WARNING | Realism warnings (motif dominance, threshold clustering), failed convergence |
+| WARNING | Failed convergence, condition_group_connector mismatches |
 | ERROR | LLM JSON parse failures with raw response preview |
 
 ```bash

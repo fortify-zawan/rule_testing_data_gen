@@ -66,7 +66,7 @@ def _applicable_patterns(rule: Rule) -> list[str]:
     )
     has_or = any(c.logical_connector == "OR" for c in rule.conditions[:-1])
     has_window = any(c.window for c in rule.conditions)
-    has_filter = any(c.filter_attribute for c in rule.conditions)
+    has_filter = any(c.filters for c in rule.conditions)
 
     if has_numeric:
         patterns += ["boundary_just_over", "boundary_at_threshold"]
@@ -90,8 +90,13 @@ def _format_conditions(rule: Rule) -> str:
             line += f"  [aggregation: {c.aggregation}]"
         if c.window:
             line += f"  [window: {c.window}]"
-        if c.filter_attribute:
-            line += f"  [filter: {c.filter_attribute} {c.filter_operator} {c.filter_value}]"
+        if c.filters:
+            filter_desc = " ".join(
+                (f"{fc.attribute} {fc.operator} field({fc.value_field})" if fc.value_field else f"{fc.attribute} {fc.operator} {fc.value}")
+                + (f" {fc.connector}" if k < len(c.filters) - 1 else "")
+                for k, fc in enumerate(c.filters)
+            )
+            line += f"  [filter: {filter_desc}]"
         if i < len(rule.conditions) - 1:
             line += f"  → {c.logical_connector}"
         parts.append(line)

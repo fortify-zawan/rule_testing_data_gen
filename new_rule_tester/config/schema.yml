@@ -57,7 +57,8 @@ transaction_attributes:
 
   transaction_status:
     type: categorical
-    description: Current status of the transaction (e.g. completed, pending, cancelled, refunded)
+    description: Current status of the transaction
+    allowed_values: [completed, cancelled, refunded, charged_back]
     aliases: [status, txn_status]
 
   payment_direction:
@@ -94,6 +95,11 @@ transaction_attributes:
     type: categorical
     description: IP address from which the transaction was initiated
     aliases: [ip]
+  
+  send_reason:
+    type: categorical
+    description: Stated reason for the transfer
+    aliases: [transfer_reason, reason, purpose]
 
   is_fraud:
     type: boolean
@@ -134,20 +140,26 @@ user_attributes:
     description: Whether the user account is currently blocked
     aliases: [blocked, account_blocked]
 
-  transaction_count:
-    type: numeric
-    description: Total historical transaction count for the user
-    aliases: [total_transactions, txn_count]
+  sender_address:
+    type: categorical
+    description: Physical address of the sender (PII)
+    aliases: [address]
 
-  successful_transaction_count:
-    type: numeric
-    description: Count of successful historical transactions
-    aliases: [successful_txns]
 
   signup_send_country_code:
     type: categorical
     description: Country from which the user signed up to send — use full country name (e.g. "United Kingdom")
     aliases: [signup_country, registration_country]
+
+  gender:
+    type: categorical
+    description: Gender of the user (e.g. male, female, non-binary)
+    aliases: [user_gender, sex]
+
+  user_name:
+    type: categorical
+    description: Full name of the sending user
+    aliases: [sender_name, full_name, name]
 
 # ── Recipient attributes ──────────────────────────────────────────────────────
 # Attributes of the recipient of a transaction.
@@ -162,11 +174,31 @@ recipient_attributes:
     type: boolean
     description: Whether the recipient is a known relation of the sender
     aliases: [related_party, related_to_sender]
-
-  send_reason:
+  
+  recipiemt_nationality_code:
     type: categorical
-    description: Stated reason for the transfer
-    aliases: [transfer_reason, reason, purpose]
+    description: Nationality of the recipient — use full country name (e.g. "Iranian", "British")
+    aliases: [ recipient_nationality, recipient_country]
+  
+  recipient_name:
+    type: categorical
+    description: Full name of the recipient
+    aliases: [beneficiary_name, receiver_name]
+
+  recipient_email:
+    type: categorical
+    description: Email address of the recipient (PII)
+    aliases: [beneficiary_email, receiver_email]
+
+  recipient_phone:
+    type: categorical
+    description: Phone number of the recipient (PII)
+    aliases: [beneficiary_phone, receiver_phone]
+
+  recipient_address:
+    type: categorical
+    description: Physical address of the recipient (PII)
+    aliases: [beneficiary_address, receiver_address]
 
 # ── Supported aggregations ────────────────────────────────────────────────────
 # These are the ONLY aggregation types the engine can compute.
@@ -193,15 +225,15 @@ aggregations:
     applies_to: numeric
     description: >
       Sum of a numeric attribute for the filtered subset divided by the total for all transactions.
-      Requires filter_attribute/filter_operator/filter_value to define the subset.
+      Requires at least one FilterClause in the filters list to define the subset.
 
   ratio:
     applies_to: numeric
     description: >
       Tier 1 (Pattern A) — subset ÷ complement within the same window.
-      Numerator = transactions matching filter_attribute/operator/value.
+      Numerator = transactions matching the filters list.
       Denominator = all other transactions in the same window.
-      Set filter_attribute/operator/value and window. Leave derived_attributes null.
+      Set filters and window. Leave derived_attributes null.
       Example: Iran sends / non-Iran sends in last 30 days.
       For comparing two SEPARATELY-WINDOWED quantities (e.g. last 7d vs prior 30d),
       use a Tier 2 derived condition instead (see derived_expressions below).
@@ -223,11 +255,21 @@ aggregations:
     applies_to: datetime
     description: >
       Number of days between the earliest and latest transaction date in the sequence
-      (or earliest matching transaction if filter fields are set).
+      (or earliest matching transaction if filters are set).
       Use on created_at to measure account tenure / activity span.
-      With a filter: (latest date across all txns) - (earliest date among filtered txns).
+      With filters: (latest date across all txns) - (earliest date among filtered txns).
       Examples: days_since_first(created_at) = account age in days.
-      days_since_first(created_at, filter: receive_country_code in ["Iran"]) = days since first Iran transaction.
+      days_since_first(created_at, filters: [{receive_country_code in [Iran]}]) = days since first Iran transaction.
+
+  age_years:
+    applies_to: datetime
+    description: >
+      User's age in whole years at the time of the latest transaction in the sequence.
+      Always use on date_of_birth (never on created_at).
+      Computed as floor((latest_txn_date - date_of_birth) / 365).
+      Example: age_years(date_of_birth) > 65 — user is older than 65 at transaction time.
+      Use this when the rule references the user's actual age (e.g. "elderly customer", "under 18").
+      Do NOT use days_since_first for age — that measures transaction history span, not user age.
 
 # ── Derived expressions (Tier 2 conditions) ──────────────────────────────────
 # Used when a condition compares two SEPARATELY-WINDOWED aggregations.

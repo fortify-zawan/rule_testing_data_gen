@@ -1,0 +1,179 @@
+rule_id,rule_name,rule_description
+R01,Structuring-OneToMany-1w,"For this sender
+(If the unique count of recipient countries in last month > 3 AND
+If the count of unique recipients in last month > 10 AND sum of successful transaction amounts, where the sender and recipient surnames do not match in last month > 5000) OR
+(If the unique count of recipient countries in last month <= 3 AND If the count of unique recipients in last month > 20 AND sum of successful transaction amounts, where the sender and recipient surnames do not match in last month > 7500)
+THEN ALERT"
+R02,Structuring-OneToMany-1m,"For this sender
+(If the unique count of recipient countries in last month > 3 AND
+If the count of unique recipients in last month > 15 AND sum of successful transaction amounts, where the sender and recipient surnames do not match in last month > 10000) OR
+(If the unique count of recipient countries in last month <= 3 AND If the count of unique recipients in last month > 25 AND sum of successful transaction amounts, where the sender and recipient surnames do not match in last month > 15000)
+THEN ALERT"
+R03,Structuring-LargeVolume-1m,"For this sender
+(If the count of successful transactions to a single recipient in the last month > 25) OR
+(If the count of successful transactions to a single recipient in the last month > 15 AND
+If the sum of successful transaction values to a single recipient in the last month > 5000)
+THEN ALERT"
+R04,Structuring-ManyToOne-Smurfing-3m,"For this recipient
+If the number of different senders in the last 3 months minus the number of different addresses seen for senders in the last 3 months > 4 OR
+If the number of different senders in the last 3 months minus the number of different emails seen for senders in the last 3 months > 1 OR
+If the number of different senders in the last 3 months minus the number of different phones seen for senders in the last 3 months > 1 OR
+If the number of different senders in the last 3 months minus the number of different deviceIds seen for senders in the last 3 months > 5
+THEN ALERT"
+R05,Structuring-ManyToOne-Funnelling-1m,"For this receiver
+(If this receiver country is in HR_COUNTRY list AND
+(Number of unique sender countries in last month > 4 OR number of unique sender nationalities in last month > 3)) OR
+(If this receiver country is not in HR_COUNTRY list AND
+(Number of unique sender countries in last month > 5 OR number of unique sender nationalities in last month > 4))
+THEN ALERT
+HR_COUNTRY = ('AE', 'AI', 'AO', 'AS', 'BB', 'BF', 'BG', 'BH', 'BI', 'BL', 'BM', 'BO', 'BR', 'BS', 'CD', 'CF', 'CI', 'CM', 'DZ', 'EH', 'FJ', 'FM', 'GA', 'GG', 'GU', 'HT', 'IL', 'IM', 'IQ', 'JE', 'JM', 'KE', 'KH', 'KW', 'KY', 'LA', 'LB', 'LY', 'MC', 'MH', 'ML', 'MZ', 'NA', 'NG', 'NP', 'NR', 'PA', 'PG', 'PN', 'PW', 'RS', 'SD', 'SO', 'SS', 'TC', 'TD', 'TJ', 'TM', 'TT', 'UG', 'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'ZA', 'ZM', 'ZW')"
+R06,Structuring-ManyToOne-1m,"For this receiver
+(If the sum of successful transactions in last month > 10000 AND
+the number of senders of successful transactions > 8 in last month) OR
+(If the sum of successful transactions to a recipient in a high risk country in last month > 8000 AND
+the number of senders of successful transactions to a recipient in a high risk country in last month > 6)
+THEN ALERT
+HR_COUNTRY = ('AE', 'AI', 'AO', 'AS', 'BB', 'BF', 'BG', 'BH', 'BI', 'BL', 'BM', 'BO', 'BR', 'BS', 'CD', 'CF', 'CI', 'CM', 'DZ', 'EH', 'FJ', 'FM', 'GA', 'GG', 'GU', 'HT', 'IL', 'IM', 'IQ', 'JE', 'JM', 'KE', 'KH', 'KW', 'KY', 'LA', 'LB', 'LY', 'MC', 'MH', 'ML', 'MZ', 'NA', 'NG', 'NP', 'NR', 'PA', 'PG', 'PN', 'PW', 'RS', 'SD', 'SO', 'SS', 'TC', 'TD', 'TJ', 'TM', 'TT', 'UG', 'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'ZA', 'ZM', 'ZW')"
+R07,Structuring-UnderThreshold-USandCanada,"For this sender
+If the sender's country is the USA and they have more than 4 successful transactions between $9000USD and $10000USD in the last month OR
+If the sender's country is Canada and they have more than 1 successful transactions between $9000CAD and $10000CAD in the last month
+THEN ALERT"
+R08,CustomerRisk-HighVelocity-1d,"For this sender
+(If the average value of successful transactions in the last day > 2000 AND
+If the count of successful transactions in the last day > 5) OR
+(If the average value of successful transactions in the last day to high-risk countries > 1200 AND
+If the count of successful transactions in the last day to high-risk countries > 4)
+THEN ALERT
+HR_COUNTRY = ('AE', 'AI', 'AO', 'AS', 'BB', 'BF', 'BG', 'BH', 'BI', 'BL', 'BM', 'BO', 'BR', 'BS', 'CD', 'CF', 'CI', 'CM', 'DZ', 'EH', 'FJ', 'FM', 'GA', 'GG', 'GU', 'HT', 'IL', 'IM', 'IQ', 'JE', 'JM', 'KE', 'KH', 'KW', 'KY', 'LA', 'LB', 'LY', 'MC', 'MH', 'ML', 'MZ', 'NA', 'NG', 'NP', 'NR', 'PA', 'PG', 'PN', 'PW', 'RS', 'SD', 'SO', 'SS', 'TC', 'TD', 'TJ', 'TM', 'TT', 'UG', 'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'ZA', 'ZM', 'ZW')"
+R09,CustomerRisk-HighVelocity-1w,"For this sender
+(If the average value of successful transactions in the last week > 2000 AND
+If the count of successful transactions in the last week > 16) OR
+(If the average value of successful transactions in the last week to high risk countries > 1200 AND
+If the count of successful transactions to high risk countries in the last week > 10)
+THEN ALERT
+HR_COUNTRY = ('AE', 'AI', 'AO', 'AS', 'BB', 'BF', 'BG', 'BH', 'BI', 'BL', 'BM', 'BO', 'BR', 'BS', 'CD', 'CF', 'CI', 'CM', 'DZ', 'EH', 'FJ', 'FM', 'GA', 'GG', 'GU', 'HT', 'IL', 'IM', 'IQ', 'JE', 'JM', 'KE', 'KH', 'KW', 'KY', 'LA', 'LB', 'LY', 'MC', 'MH', 'ML', 'MZ', 'NA', 'NG', 'NP', 'NR', 'PA', 'PG', 'PN', 'PW', 'RS', 'SD', 'SO', 'SS', 'TC', 'TD', 'TJ', 'TM', 'TT', 'UG', 'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'ZA', 'ZM', 'ZW')"
+R10,CustomerRisk-HighVelocity-1m,"For this sender
+(If the average value of successful transactions in the last month > 2000 AND
+If the count of successful transactions in the last month > 35) OR
+(If the average value of successful transactions in the last month to high risk countries > 1200 AND
+If the count of successful transactions in the last month to high risk countries > 25)
+THEN ALERT
+HR_COUNTRY = ('AE', 'AI', 'AO', 'AS', 'BB', 'BF', 'BG', 'BH', 'BI', 'BL', 'BM', 'BO', 'BR', 'BS', 'CD', 'CF', 'CI', 'CM', 'DZ', 'EH', 'FJ', 'FM', 'GA', 'GG', 'GU', 'HT', 'IL', 'IM', 'IQ', 'JE', 'JM', 'KE', 'KH', 'KW', 'KY', 'LA', 'LB', 'LY', 'MC', 'MH', 'ML', 'MZ', 'NA', 'NG', 'NP', 'NR', 'PA', 'PG', 'PN', 'PW', 'RS', 'SD', 'SO', 'SS', 'TC', 'TD', 'TJ', 'TM', 'TT', 'UG', 'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'ZA', 'ZM', 'ZW')"
+R11,CustomerRisk-ChangeInBehaviour-Transactions,"For this sender
+If the successful transaction count in the last 6 months without the last month is > 6 AND
+If successful transaction count in last month divided by the successful transaction count in the last 6 months without the last month > 2 AND
+If the average value of successful transactions in the last month divided by the average values of successful transactions in the last 6 months without the last month > 3 AND
+(If the number of unique recipients in the last month divided by the number of unique recipients in the last 6 months without the last month > 2 OR
+If the number of unique recipient countries in the last month divided by the number of unique recipient countries in the last 6 months without the last month > 1.5)
+THEN ALERT"
+R12,CustomerRisk-ChangeInBehaviour-Profile,"For this sender
+SUM = address changes + name changes + 3 x phone changes + 3 x email changes.
+If the SUM >= 2 AND (the sum of successful transaction values to high risk countries in the last month > 10000 OR the sum of all successful transaction values in the last month > 9000)
+THEN ALERT
+If the SUM >= 4 AND (the sum of successful transaction values to high risk countries in the last month > 9000 OR the sum of all successful transaction values in the last month > 7000)
+THEN ALERT
+HR_COUNTRY = ('AE', 'AI', 'AO', 'AS', 'BB', 'BF', 'BG', 'BH', 'BI', 'BL', 'BM', 'BO', 'BR', 'BS', 'CD', 'CF', 'CI', 'CM', 'DZ', 'EH', 'FJ', 'FM', 'GA', 'GG', 'GU', 'HT', 'IL', 'IM', 'IQ', 'JE', 'JM', 'KE', 'KH', 'KW', 'KY', 'LA', 'LB', 'LY', 'MC', 'MH', 'ML', 'MZ', 'NA', 'NG', 'NP', 'NR', 'PA', 'PG', 'PN', 'PW', 'RS', 'SD', 'SO', 'SS', 'TC', 'TD', 'TJ', 'TM', 'TT', 'UG', 'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'ZA', 'ZM', 'ZW')"
+R13,CustomerRisk-Dormancy,"For this sender
+If the number of transactions in last 13 months without the last week = 0 AND
+sum of successful values in last week > 3300
+THEN ALERT"
+R15,General-Wallets-Muling-3m,"For this wallet
+If the number of successful inbound transactions in the last 3 months is >= 10 AND
+If the number of successful outbound transactions in the last 3 months is >= 10
+THEN ALERT"
+R16,General-Scams-1m,"For this sender
+If the sum of values to a new recipient where the sender is >= 60 years old and the recipient country is new for the sender and sender nationality != recipient country in last month > 2000 OR
+If the count of transactions to a new recipient where the sender is >= 60 years old and the recipient country is new for the sender and sender nationality != recipient country in last month > 5
+THEN ALERT"
+R17,General-HighRiskCountry-Corridor-1w,"For this sender where the recipient country is on the HR_COUNTRY list AND the sender_country to recipient_country corridor is NOT on the SAFE_CORRIDORS list AND the sender's nationality does not match the recipient country:
+If the sum of successful transaction values in the last week > 3000 OR
+If the count of successful transactions in the last week > 14 OR
+If the number of unique recipients in the last week > 10
+THEN ALERT
+HR_COUNTRY = ('AE', 'AI', 'AO', 'AS', 'BB', 'BF', 'BG', 'BH', 'BI', 'BL', 'BM', 'BO', 'BR', 'BS', 'CD', 'CF', 'CI', 'CM', 'DZ', 'EH', 'FJ', 'FM', 'GA', 'GG', 'GU', 'HT', 'IL', 'IM', 'IQ', 'JE', 'JM', 'KE', 'KH', 'KW', 'KY', 'LA', 'LB', 'LY', 'MC', 'MH', 'ML', 'MZ', 'NA', 'NG', 'NP', 'NR', 'PA', 'PG', 'PN', 'PW', 'RS', 'SD', 'SO', 'SS', 'TC', 'TD', 'TJ', 'TM', 'TT', 'UG', 'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'ZA', 'ZM', 'ZW')
+SAFE_CORRIDORS = ('AU_AE', 'AU_BI', 'AU_FJ', 'AU_KH', 'AU_NP', 'AU_WS', 'AU_ZA', 'AU_ZM', 'AU_ZW', 'CA_AE', 'CA_BI', 'CA_BF', 'CA_CD', 'CA_JM', 'CA_NA', 'CA_TD', 'DE_MZ', 'ES_ML', 'FR_CD', 'FR_CI', 'FR_CM', 'FR_GA', 'FR_LB', 'FR_ML', 'GB_AE', 'GB_FJ', 'GB_JM', 'GB_KE', 'GB_KH', 'GB_MZ', 'GB_NG', 'GB_NP', 'GB_SO', 'GB_SS', 'GB_UG', 'GB_ZA', 'GB_ZM', 'GB_ZW', 'IT_CI', 'IT_ML', 'NZ_WS', 'PT_MZ', 'US_AE', 'US_BI', 'US_BR', 'US_CD', 'US_CI', 'US_CM', 'US_FJ', 'US_HT', 'US_JM', 'US_KE', 'US_KH', 'US_LB', 'US_MZ', 'US_NA', 'US_NG', 'US_PA', 'US_SO', 'US_SS', 'US_TJ', 'US_UG', 'US_VN', 'US_ZA', 'US_ZM')"
+R18,PredicateOffence-TF-1w,"For this sender:
+(If the count of successful Cash or MMT transactions where the recipient country is on the TF_COUNTRY list and the receive amount is divisible by 100 in the last week > 32)
+OR
+(If the count of successful Cash or MMT transactions where the recipient country is on the TF_COUNTRY list in the last week > 20 AND
+If the ratio of that 1-week count to the count of the same transaction type in the prior 6 months > 3 AND
+If the total count of all successful transactions in the prior 6 months > 6)
+THEN ALERT
+TF_COUNTRY = ('AF', 'BJ', 'BF', 'BI', 'CM', 'TD', 'CL', 'CO', 'CD', 'EG', 'IN', 'IQ', 'IR', 'IL', 'JO', 'KE', 'LB', 'ML', 'MA', 'MZ', 'MM', 'NE', 'NG', 'PK', 'PH', 'QA', 'RW', 'SO', 'SY', 'TG', 'TR', 'AE', 'YE')"
+R19,PredicateOffence-TF-MTO-1w,"For this recipient phone number:
+(If the count of unique senders of successful Cash or MMT transactions where the recipient country is on the TF_COUNTRY list in the last week > 4 AND
+If the sum of those transaction values in the last week > 4000)
+OR
+(If the count of unique senders of successful Cash or MMT transactions where the recipient country is on the TF_COUNTRY list in the last week > 3 AND
+If the sum of those transaction values in the last week > 3000 AND
+If the ratio of that 1-week unique sender count to the total number of Cash or MMT transactions received from TF_COUNTRY in the prior 6 months > 2)
+THEN ALERT
+TF_COUNTRY = ('AF', 'BJ', 'BF', 'BI', 'CM', 'TD', 'CL', 'CO', 'CD', 'EG', 'IN', 'IQ', 'IR', 'IL', 'JO', 'KE', 'LB', 'ML', 'MA', 'MZ', 'MM', 'NE', 'NG', 'PK', 'PH', 'QA', 'RW', 'SO', 'SY', 'TG', 'TR', 'AE', 'YE')"
+R25,PredicateOffence-HT-OneToMany-1m,"For this sender
+If the sum of successful transactions where the recipient country is on the HT_COUNTRY_LOWCASH list and the Payout_method is Cash and the sender nationality != sender country != recipient country over the last month > 2000 OR
+If the count of unique recipients of successful transactions where the recipient country is on the HT_COUNTRY_LOWCASH list and the Payout_method is Cash and the sender nationality != sender country != recipient country over the last month > 2 OR
+If the sum of successful transactions where the recipient country is on the HT_COUNTRY_LOWMMT list and the Payout_method is Mobile Money Transfer and the sender nationality != sender country != recipient country over the last month > 1250 OR
+If the count of unique recipients of successful transactions where the recipient country is on the HT_COUNTRY_LOWMMT list and the Payout_method is Mobile Money Transfer and the sender nationality != sender country != recipient country over the last month > 3
+THEN ALERT
+HT_COUNTRY_LOWCASH = ('AF', 'AL', 'BD', 'BY', 'BR', 'BG', 'KH', 'TD', 'CN', 'CO', 'CU', 'ER', 'FJ', 'HN', 'IN', 'ID', 'IR', 'IQ', 'LA', 'MO', 'MD', 'NI', 'NG', 'PG', 'PK', 'PL', 'PT', 'RO', 'RU', 'RW', 'SN', 'KR', 'SS', 'SD', 'SY', 'TW', 'TH', 'UA', 'UZ', 'VE')
+HT_COUNTRY_LOWMMT = ('AF', 'AL', 'BY', 'BR', 'BG', 'KH', 'TD', 'CN', 'CU', 'ER', 'ET', 'GT', 'HN', 'IN', 'ID', 'IR', 'IQ', 'LA', 'MO', 'MX', 'MD', 'MA', 'NI', 'NG', 'PG', 'PK', 'PL', 'PT', 'RO', 'RU', 'KR', 'SD', 'SY', 'TW', 'TH', 'UA', 'AE', 'UZ', 'VE')"
+R26,PredicateOffence-HT-ManyToOne-1m,"For this recipient
+(If the sum of successful transaction values where the recipient_country is on the HT_COUNTRY list over the last month > 6000 AND
+If the count of unique senders of successful transactions where the recipient_country is on the HT_COUNTRY list over the last month > 5) OR
+(If the sum of successful transactions where the recipient country is on the HT_COUNTRY_LOWCASH list and the Payout_method is Cash and the sender nationality != sender country != recipient country over the last month > 1500 AND
+If the count of unique senders of such transactions over the last month > 1) OR
+(If the sum of successful transactions where the recipient country is on the HT_COUNTRY_LOWMMT list and the Payout_method is Mobile Money Transfer and the sender nationality != sender country != recipient country over the last month > 1000 AND
+If the count of unique senders of such transactions over the last month > 1)
+THEN ALERT
+HT_COUNTRY = ('AF', 'AL', 'BD', 'BY', 'BR', 'BG', 'KH', 'TD', 'CN', 'CO', 'CU', 'ER', 'ET', 'FJ', 'GT', 'HN', 'IN', 'ID', 'IR', 'IQ', 'LA', 'MO', 'MX', 'MD', 'MA', 'NI', 'NG', 'PG', 'PK', 'PH', 'PL', 'PT', 'RO', 'RU', 'RW', 'SN', 'KR', 'SS', 'SD', 'SY', 'TW', 'TH', 'UA', 'AE', 'UZ', 'VE')
+HT_COUNTRY_LOWCASH = ('AF', 'AL', 'BD', 'BY', 'BR', 'BG', 'KH', 'TD', 'CN', 'CO', 'CU', 'ER', 'FJ', 'HN', 'IN', 'ID', 'IR', 'IQ', 'LA', 'MO', 'MD', 'NI', 'NG', 'PG', 'PK', 'PL', 'PT', 'RO', 'RU', 'RW', 'SN', 'KR', 'SS', 'SD', 'SY', 'TW', 'TH', 'UA', 'UZ', 'VE')
+HT_COUNTRY_LOWMMT = ('AF', 'AL', 'BY', 'BR', 'BG', 'KH', 'TD', 'CN', 'CU', 'ER', 'ET', 'GT', 'HN', 'IN', 'ID', 'IR', 'IQ', 'LA', 'MO', 'MX', 'MD', 'MA', 'NI', 'NG', 'PG', 'PK', 'PL', 'PT', 'RO', 'RU', 'KR', 'SD', 'SY', 'TW', 'TH', 'UA', 'AE', 'UZ', 'VE')"
+R27,PredicateOffence-Narco-OneToMany-1w,"For this sender
+(If the unique count of recipients for successful transactions where the recipient country is in the NARCO_COUNTRY list in the last week > 7 AND
+If the count of successful transactions where the recipient country is in the NARCO_COUNTRY list in the last week > 14 AND
+If the sum of successful transaction values where the recipient country is in the NARCO_COUNTRY list in the last week > 5500) OR
+(If the unique count of recipients for successful transactions where the recipient country is MX and the sender country is US in the last week > 2 AND
+If the count of successful transactions where the recipient country is MX and the sender country is US in the last week > 4 AND
+If the sum of successful transaction values where the recipient country is MX and the sender country is US in the last week > 2000)
+THEN ALERT
+NARCO_COUNTRY = ('AF', 'BD', 'BO', 'BR', 'CO', 'GT', 'HN', 'IN', 'IR', 'KE', 'LA', 'MM', 'MX', 'NG', 'PA', 'PE', 'PK', 'TH', 'VE', 'VN')"
+R28,PredicateOffence-Narco-ManyToOne-1d,"For this recipient phone number:
+(If the count of unique senders of successful transactions where the recipient country is on the NARCO_COUNTRY list in the last day > 2 AND
+If the sum of those transaction values in the last day > 3000)
+OR
+(If the count of unique senders of successful transactions where the recipient country is on the NARCO_COUNTRY list and the sender's country is NOT on the NARCO_COUNTRY list and the payout method is Cash or MMT in the last day > 2 AND
+If the sum of those transaction values in the last day > 2000)
+THEN ALERT
+NARCO_COUNTRY = ('AF', 'BD', 'BO', 'BR', 'CO', 'GT', 'HN', 'IN', 'IR', 'KE', 'LA', 'MM', 'MX', 'NG', 'PA', 'PE', 'PK', 'TH', 'VE', 'VN')"
+R29,PredicateOffence-Narco-ManyToOne-1w,"For this recipient phone number:
+(If the count of unique senders of successful transactions where the recipient country is on the NARCO_COUNTRY list in the last week > 3 AND
+If the sum of those transaction values in the last week > 4000)
+OR
+(If the count of unique senders of successful transactions where the recipient country is on the NARCO_COUNTRY list and the sender's country is NOT on the NARCO_COUNTRY list and the payout method is Cash or MMT in the last week > 3 AND
+If the sum of those transaction values in the last week > 3000)
+THEN ALERT
+NARCO_COUNTRY = ('AF', 'BD', 'BO', 'BR', 'CO', 'GT', 'HN', 'IN', 'IR', 'KE', 'LA', 'MM', 'MX', 'NG', 'PA', 'PE', 'PK', 'TH', 'VE', 'VN')"
+R30,PredicateOffence-Narco-ManyToOne-1m,"For this recipient phone number:
+(If the count of unique senders of successful transactions where the recipient country is on the NARCO_COUNTRY list in the last month > 4 AND
+If the sum of those transaction values in the last month > 8000)
+OR
+(If the count of unique senders of successful transactions where the recipient country is on the NARCO_COUNTRY list and the sender's country is NOT on the NARCO_COUNTRY list and the payout method is Cash or MMT in the last month > 4 AND
+If the sum of those transaction values in the last month > 6000)
+THEN ALERT
+NARCO_COUNTRY = ('AF', 'BD', 'BO', 'BR', 'CO', 'GT', 'HN', 'IN', 'IR', 'KE', 'LA', 'MM', 'MX', 'NG', 'PA', 'PE', 'PK', 'TH', 'VE', 'VN')"
+R31,PredicateOffence-PF-1m,"For this sender
+If the sum of successful transaction values to a recipient country on the PF_COUNTRY list > 15000 in a month OR
+If the sum of successful transaction values to a recipient country on the PF_COUNTRY list where this sender hasn't interacted with this recipient in the past > 10000 in a month
+THEN ALERT
+PF_COUNTRY = ('AM', 'AZ', 'CN', 'GE', 'HK', 'IR', 'KZ', 'KP', 'PK', 'RS', 'TR', 'AE')"
+T01,Test-KenyaAvgAccountAge,"alert if avg amount send to Kenya is greater than 500 for young accounts (<= 7days old)"
+T02,Test-IranRatioAndAvg,"alert if for an account amount send to iran in last 7 days increases by more than twice as compared to amount send to iran in last 30 days excluding the last 7 days and average amount send to iran in last 7 days is greater than 500"
+T03,Test-SharedPII,"alert if there's a recipient where they have multiple senders who share PII elements like email or phone number within a 30day window"
+T04,Test-ScamsElderly,"For this sender
+If the sum of values to a new recipient where the sender is >= 60 years old and the recipient country is new for the sender and sender nationality != recipient country in last month > 2000 OR
+If the count of transactions to a new recipient where the sender is >= 60 years old and the recipient country is new for the sender and sender nationality != recipient country in last month > 5
+THEN ALERT"
+T05,Test-StructuringTwoGroups,"For this sender
+(If the unique count of recipient countries in last month > 3 AND If the count of unique recipients in last month > 10 AND sum of successful transaction amounts where the sender and recipient surnames do not match in last month > 5000) OR
+(If the unique count of recipient countries in last month <= 3 AND If the count of unique recipients in last month > 20 AND sum of successful transaction amounts where the sender and recipient surnames do not match in last month > 7500)
+THEN ALERT"

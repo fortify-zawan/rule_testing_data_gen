@@ -22,6 +22,45 @@ def _canonicalize_attrs(attrs: dict, high_risk_countries: list[str] | None = Non
     return normalize_country_values(renamed, high_risk_countries)
 
 
+def _rule_allowed_attrs(rule: Rule) -> set[str]:
+    """Return the full set of attribute names the LLM needs to generate for this rule.
+
+    Includes relevant_attributes declared by the parser, all filter attributes from
+    every condition, derived-attribute filter, and computed-attr filter (so e.g.
+    transaction_status is always present even when the parser omits it from
+    relevant_attributes), plus fixed display columns that always appear in the UI table.
+    """
+    attrs = set(rule.relevant_attributes)
+
+    # CA names are not raw fields — exclude them when walking CA filters
+    ca_names = {ca.name for ca in rule.computed_attrs}
+
+    for ca in rule.computed_attrs:
+        for fc in (ca.filters or []):
+            if fc.attribute and fc.attribute not in ca_names:
+                attrs.add(fc.attribute)
+            if fc.value_field and fc.value_field not in ca_names:
+                attrs.add(fc.value_field)
+        if ca.group_by and ca.group_by not in ca_names:
+            attrs.add(ca.group_by)
+        if ca.link_attribute:
+            attrs.update(la for la in ca.link_attribute if la not in ca_names)
+
+    for cond in rule.conditions:
+        for fc in (cond.filters or []):
+            if fc.attribute:
+                attrs.add(fc.attribute)
+        for da in (cond.derived_attributes or []):
+            for fc in (da.filters or []):
+                if fc.attribute:
+                    attrs.add(fc.attribute)
+
+    attrs |= {"created_at", "send_amount", "send_currency"}
+    # transaction_id is the row identity (t.id), not an attribute to generate
+    attrs.discard("transaction_id")
+    return attrs
+
+
 
 # ─── Stateless ────────────────────────────────────────────────────────────────
 
@@ -87,10 +126,11 @@ def generate_behavioral_sequence(
     if all_feedback:
         conflict_section = CONFLICT_SECTION_TEMPLATE.format(scenario_type=scenario_type)
 
+    _allowed = _rule_allowed_attrs(rule)
     prompt = BEHAVIORAL_PROMPT.format(
-        schema_context=format_attributes_for_prompt(show_aliases=False),
+        schema_context=format_attributes_for_prompt(show_aliases=False, allowed_attrs=_allowed),
         raw_expression=rule.raw_expression,
-        attributes=", ".join(rule.relevant_attributes),
+        attributes=", ".join(sorted(_allowed - {"created_at"})),
         high_risk_countries=", ".join(rule.high_risk_countries) if rule.high_risk_countries else "none specified",
         scenario_type=scenario_type,
         intent_section=intent_section,
@@ -106,8 +146,20 @@ def generate_behavioral_sequence(
         raw_txns = data.get("transactions", [])
         conflict_dicts = data.get("feedback_conflicts", [])
 
-    transactions = [
-        Transaction(id=t["id"], tag=t.get("tag", scenario_type), attributes=_canonicalize_attrs(t["attributes"], rule.high_risk_countries))
-        for t in raw_txns
-    ]
+    transactions = []
+    for t in raw_txns:
+        if not isinstance(t, dict):
+            continue
+        txn_id = t.get("id") or t.get("transaction_id")
+        if not txn_id:
+            continue
+        raw_attrs = t.get("attributes") or {k: v for k, v in t.items() if k not in ("id", "transaction_id", "tag")}
+        transactions.append(Transaction(
+            id=txn_id,
+            tag=t.get("tag", scenario_type),
+            attributes={
+                k: v for k, v in _canonicalize_attrs(raw_attrs, rule.high_risk_countries).items()
+                if k in _allowed
+            },
+        ))
     return transactions, conflict_dicts

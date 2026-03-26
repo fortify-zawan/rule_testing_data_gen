@@ -29,9 +29,15 @@ def _evaluate_operator(actual, operator: str, threshold) -> bool:
         elif operator == "<=":
             return float(actual) <= float(threshold)
         elif operator == "==":
-            return str(actual) == str(threshold)
+            try:
+                return float(actual) == float(threshold)
+            except (TypeError, ValueError):
+                return str(actual) == str(threshold)
         elif operator == "!=":
-            return str(actual) != str(threshold)
+            try:
+                return float(actual) != float(threshold)
+            except (TypeError, ValueError):
+                return str(actual) != str(threshold)
         elif operator == "in":
             vals = threshold if isinstance(threshold, list) else [threshold]
             return str(actual) in [str(v) for v in vals]
@@ -44,19 +50,45 @@ def _evaluate_operator(actual, operator: str, threshold) -> bool:
 
 
 def _combine_results(condition_results: list[ConditionResult], conditions: list[RuleCondition]) -> bool:
-    """Combine per-condition pass/fail using AND/OR connectors."""
+    """Combine per-condition results respecting condition_group and condition_group_connector.
+
+    Within each group: conditions combined left-to-right using logical_connector (AND/OR).
+    Across groups: groups combined in ascending group-number order using each group's
+    condition_group_connector (taken from the first condition in that group).
+    """
     if not condition_results:
         return True
 
-    # Build a boolean expression respecting AND/OR connectors
-    # logical_connector on condition[i] connects condition[i] to condition[i+1]
-    result = condition_results[0].passed
-    for i in range(1, len(condition_results)):
-        connector = conditions[i - 1].logical_connector.upper()
-        if connector == "OR":
-            result = result or condition_results[i].passed
-        else:  # AND (default)
-            result = result and condition_results[i].passed
+    from collections import defaultdict
+    groups: dict[int, list] = defaultdict(list)
+    group_connector: dict[int, str] = {}
+
+    for cr, cond in zip(condition_results, conditions):
+        gid = cond.condition_group
+        groups[gid].append((cr, cond))
+        if gid not in group_connector:
+            group_connector[gid] = (cond.condition_group_connector or "OR").upper()
+        elif (cond.condition_group_connector or "OR").upper() != group_connector[gid]:
+            log.warning(
+                "condition_group_connector mismatch in group %d: expected %s, got %s — using first value",
+                gid, group_connector[gid], cond.condition_group_connector,
+            )
+
+    def _eval_group(items) -> bool:
+        result = items[0][0].passed
+        for i in range(1, len(items)):
+            connector = (items[i - 1][1].logical_connector or "AND").upper()
+            result = result or items[i][0].passed if connector == "OR" else result and items[i][0].passed
+        return result
+
+    sorted_ids = sorted(groups)
+    result = _eval_group(groups[sorted_ids[0]])
+    for i in range(1, len(sorted_ids)):
+        prev_id = sorted_ids[i - 1]
+        conn = group_connector.get(prev_id, "OR")
+        next_result = _eval_group(groups[sorted_ids[i]])
+        result = result or next_result if conn == "OR" else result and next_result
+
     return result
 
 
@@ -114,6 +146,20 @@ def evaluate_behavioral_sequence(
     condition_results = []
 
     for cond in rule.conditions:
+        # ComputedAttr-backed condition — value pre-computed in aggregates by _compute_all_attrs
+        if cond.computed_attr_name:
+            key = cond.computed_attr_name
+            actual = aggregates.get(key, 0)
+            passed = _evaluate_operator(actual, cond.operator, cond.value)
+            condition_results.append(ConditionResult(
+                attribute=key,
+                operator=cond.operator,
+                threshold=cond.value,
+                actual_value=actual,
+                passed=passed,
+            ))
+            continue
+
         # Tier 2: derived condition — look up by auto-generated key
         if cond.derived_attributes is not None:
             key = cond.aggregate_key()

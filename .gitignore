@@ -31,6 +31,12 @@ logs/
 # ── Claude Code ──────────────────────────────────────────────────────────────
 .claude/
 
+# ── Test output reports ───────────────────────────────────────────────────────
+new_rule_tester/batch_report_*.csv
+new_rule_tester/batch_report_*.json
+new_rule_tester/test_new_rules_*.csv
+new_rule_tester/test_new_rules_*.json
+
 # ── OS artefacts ─────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db

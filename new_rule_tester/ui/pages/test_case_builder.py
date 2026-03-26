@@ -130,7 +130,7 @@ def _render_test_cases_content(rule: Rule, cases: list[BehavioralTestCase]):
                 for t in sorted(case.transactions, key=lambda t: t.attributes.get("created_at") or ""):
                     row = {"id": t.id, "tag": t.tag}
                     for col in display_attrs:
-                        row[col] = t.attributes.get(col, "")
+                        row[col] = t.id if col == "transaction_id" else t.attributes.get(col, "")
                     rows.append(row)
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -345,7 +345,7 @@ def render():
                     da_lines = "\n".join(
                         f"    [{j}] {da.name}: {da.aggregation}({da.attribute})"
                         f"{', window=' + da.window if da.window else ''}"
-                        f"{', filter: ' + da.filter_attribute + ' ' + (da.filter_operator or '') + ' ' + str(da.filter_value) if da.filter_attribute else ''}"
+                        f"{(', filter: ' + ' '.join((fc.attribute + ' ' + fc.operator + ' field(' + fc.value_field + ')') if fc.value_field else (fc.attribute + ' ' + fc.operator + ' ' + str(fc.value)) for fc in da.filters)) if da.filters else ''}"
                         for j, da in enumerate(cond.derived_attributes)
                     )
                     st.code(
@@ -355,22 +355,29 @@ def render():
                         language="text",
                     )
                 else:
+                    filter_str = (
+                        " ".join(
+                            (f"{fc.attribute} {fc.operator} field({fc.value_field})" if fc.value_field else f"{fc.attribute} {fc.operator} {fc.value}")
+                            + (f" {fc.connector}" if k < len(cond.filters) - 1 else "")
+                            for k, fc in enumerate(cond.filters)
+                        )
+                        if cond.filters else "none"
+                    )
                     st.code(
                         f"Condition {i+1}: {cond.attribute} {cond.operator} {cond.value}\n"
-                        f"  aggregation:      {cond.aggregation!r}\n"
-                        f"  filter_attribute: {cond.filter_attribute!r}\n"
-                        f"  filter_operator:  {cond.filter_operator!r}\n"
-                        f"  filter_value:     {cond.filter_value!r}  (type: {type(cond.filter_value).__name__})",
+                        f"  aggregation: {cond.aggregation!r}\n"
+                        f"  filters:     {filter_str}",
                         language="text",
                     )
             st.markdown("**Transaction attributes (relevant columns):**")
             for t in case.transactions:
-                fa = rule.conditions[0].filter_attribute if rule.conditions else None
-                attr = rule.conditions[0].attribute if rule.conditions else None
-                fa_val = t.attributes.get(fa) if fa else "—"
+                first_cond = rule.conditions[0] if rule.conditions else None
+                first_filter_attr = (first_cond.filters[0].attribute if first_cond and first_cond.filters else None)
+                attr = first_cond.attribute if first_cond else None
+                fa_val = t.attributes.get(first_filter_attr) if first_filter_attr else "—"
                 attr_val = t.attributes.get(attr) if attr else "—"
                 st.text(
-                    f"  {t.id} | {fa}={fa_val!r}  |  {attr}={attr_val!r}  |  keys: {list(t.attributes.keys())}"
+                    f"  {t.id} | {first_filter_attr}={fa_val!r}  |  {attr}={attr_val!r}  |  keys: {list(t.attributes.keys())}"
                 )
 
         st.divider()

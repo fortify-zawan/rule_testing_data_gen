@@ -29,9 +29,19 @@ def _get_client() -> anthropic.Anthropic:
     if not api_key:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
 
+    # Fall back to Streamlit secrets
+    if not api_key:
+        try:
+            import streamlit as st
+
+            api_key = st.secrets.get("ANTHROPIC_API_KEY", "").strip() or None
+        except Exception:
+            pass
+
     if not api_key:
         raise ValueError(
-            "No API key configured. Please enter your Anthropic API key in Settings (sidebar)."
+            "No API key configured. Set ANTHROPIC_API_KEY in the sidebar Settings, "
+            "as an environment variable, or in .streamlit/secrets.toml."
         )
 
     # Re-create client if key changed or client doesn't exist
@@ -72,20 +82,45 @@ def call_llm_json(
     system: str = "",
     model: str = "claude-haiku-4-5-20251001",
     max_tokens: int = 8192,
+    max_retries: int = 2,
 ) -> dict:
-    """Call the LLM expecting a JSON response. Strips markdown fences and trailing text."""
-    raw = call_llm(prompt, system=system, model=model, max_tokens=max_tokens)
-    text = raw.strip()
-    # Strip markdown code fences if the model wraps the JSON
-    if text.startswith("```"):
-        lines = text.splitlines()
-        inner = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
-        text = "\n".join(inner)
-    try:
-        # raw_decode parses the first complete JSON value and ignores any trailing text,
-        # which handles the case where the model appends an explanation after the JSON.
-        obj, _ = json.JSONDecoder().raw_decode(text)
-        return obj
-    except json.JSONDecodeError as exc:
-        log.error("LLM JSON parse failed: %s | raw_text_preview=%r", exc, text[:300])
-        raise
+    """Call the LLM expecting a JSON response. Strips markdown fences and trailing text.
+
+    Retries up to max_retries times on empty or unparseable responses before raising.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(max_retries + 1):
+        raw = call_llm(prompt, system=system, model=model, max_tokens=max_tokens)
+        text = raw.strip()
+        # Strip markdown code fences if the model wraps the JSON
+        if text.startswith("```"):
+            lines = text.splitlines()
+            inner = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+            text = "\n".join(inner)
+
+        if not text:
+            last_exc = json.JSONDecodeError("LLM returned empty response", "", 0)
+            log.warning(
+                "LLM returned empty response (attempt %d/%d) — will retry",
+                attempt + 1, max_retries + 1,
+            )
+        else:
+            try:
+                # raw_decode parses the first complete JSON value and ignores any trailing
+                # text, which handles the case where the model appends an explanation.
+                obj, _ = json.JSONDecoder().raw_decode(text)
+                if attempt > 0:
+                    log.info("LLM JSON parse succeeded on retry attempt %d", attempt + 1)
+                return obj
+            except json.JSONDecodeError as exc:
+                last_exc = exc
+                log.warning(
+                    "LLM JSON parse failed (attempt %d/%d): %s | raw_text_preview=%r",
+                    attempt + 1, max_retries + 1, exc, text[:300],
+                )
+
+    log.error(
+        "LLM JSON parse failed after %d attempt(s). Last error: %s",
+        max_retries + 1, last_exc,
+    )
+    raise last_exc

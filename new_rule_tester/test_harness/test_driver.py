@@ -23,7 +23,7 @@ _ROOT = os.path.dirname(_HERE)          # new_rule_tester/
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from domain.models import DerivedAttr, Rule, RuleCondition  # noqa: E402
+from domain.models import DerivedAttr, FilterClause, Rule, RuleCondition  # noqa: E402
 from llm.rule_parser import parse_rule  # noqa: E402
 
 _BENCHMARK_DEFAULT = os.path.join(_ROOT, "benchmark.json")
@@ -32,27 +32,50 @@ _BENCHMARK_DEFAULT = os.path.join(_ROOT, "benchmark.json")
 # ── Hydration: benchmark JSON dict → domain objects ───────────────────────────
 
 def _coerce_list(operator: str | None, value: Any) -> Any:
-    """Ensure filter_value / condition value is a list when operator is in/not_in."""
+    """Ensure a value is a list when operator is in/not_in."""
     if operator in ("in", "not_in") and value is not None and not isinstance(value, list):
         return [value]
     return value
 
 
+def _hydrate_filter_clause(raw: dict) -> FilterClause:
+    op = raw.get("operator", "==")
+    val = raw.get("value")
+    if op in ("in", "not_in") and val is not None and not isinstance(val, list):
+        val = [val]
+    return FilterClause(
+        attribute=raw.get("attribute", ""),
+        operator=op,
+        value=val,
+        value_field=raw.get("value_field"),
+        connector=raw.get("connector", "AND"),
+    )
+
+
+def _build_filters(raw: dict) -> list[FilterClause] | None:
+    """Build filters from new-format 'filters' list or old scalar filter fields."""
+    if raw.get("filters"):
+        return [_hydrate_filter_clause(f) for f in raw["filters"]]
+    if raw.get("filter_attribute"):
+        fop = raw.get("filter_operator")
+        fval = raw.get("filter_value")
+        if fop in ("in", "not_in") and fval is not None and not isinstance(fval, list):
+            fval = [fval]
+        return [FilterClause(attribute=raw["filter_attribute"], operator=fop or "==", value=fval)]
+    return None
+
+
 def _hydrate_da(raw: dict) -> DerivedAttr:
-    fop = raw.get("filter_operator")
     return DerivedAttr(
         name=raw["name"],
         aggregation=raw.get("aggregation", "count"),
         attribute=raw.get("attribute", "transaction_id"),
         window=raw.get("window"),
-        filter_attribute=raw.get("filter_attribute"),
-        filter_operator=fop,
-        filter_value=_coerce_list(fop, raw.get("filter_value")),
+        filters=_build_filters(raw),
     )
 
 
 def _hydrate_condition(raw: dict) -> RuleCondition:
-    fop = raw.get("filter_operator")
     cop = raw.get("operator")
     return RuleCondition(
         attribute=raw.get("attribute"),
@@ -61,9 +84,7 @@ def _hydrate_condition(raw: dict) -> RuleCondition:
         aggregation=raw.get("aggregation"),
         window=raw.get("window"),
         logical_connector=raw.get("logical_connector", "AND"),
-        filter_attribute=raw.get("filter_attribute"),
-        filter_operator=fop,
-        filter_value=_coerce_list(fop, raw.get("filter_value")),
+        filters=_build_filters(raw),
         group_by=raw.get("group_by"),
         group_mode=raw.get("group_mode", "any"),
         link_attribute=raw.get("link_attribute"),
@@ -73,6 +94,8 @@ def _hydrate_condition(raw: dict) -> RuleCondition:
         ),
         derived_expression=raw.get("derived_expression"),
         window_mode=raw.get("window_mode"),
+        condition_group=raw.get("condition_group", 0),
+        condition_group_connector=raw.get("condition_group_connector", "OR"),
     )
 
 
@@ -127,23 +150,35 @@ class DAComparison:
     aggregation_match: bool
     attribute_match: bool
     window_match: bool
-    filter_match: bool
+    filters_match: bool
     score: float
     notes: list[str] = field(default_factory=list)
+
+
+def _compare_filter_clauses(exp_filters, act_filters) -> bool:
+    """Return True if both filter lists are equivalent (same length, same clauses)."""
+    exp_f = exp_filters or []
+    act_f = act_filters or []
+    if len(exp_f) != len(act_f):
+        return False
+    return all(
+        (e.attribute or "").lower() == (a.attribute or "").lower()
+        and (e.operator or "") == (a.operator or "")
+        and _vals_equal(e.value, a.value)
+        and (e.value_field or "").lower() == (a.value_field or "").lower()
+        and (e.connector or "AND").upper() == (a.connector or "AND").upper()
+        for e, a in zip(exp_f, act_f)
+    )
 
 
 def _compare_da(idx: int, exp: DerivedAttr, act: DerivedAttr) -> DAComparison:
     notes = []
 
-    name_match = (exp.name or "").lower() == (act.name or "").lower()
-    agg_match  = (exp.aggregation or "").lower() == (act.aggregation or "").lower()
-    attr_match = (exp.attribute or "").lower() == (act.attribute or "").lower()
-    win_match  = (exp.window or "").lower() == (act.window or "").lower()
-    filter_match = (
-        (exp.filter_attribute or "").lower() == (act.filter_attribute or "").lower()
-        and (exp.filter_operator or "") == (act.filter_operator or "")
-        and _vals_equal(exp.filter_value, act.filter_value)
-    )
+    name_match    = (exp.name or "").lower() == (act.name or "").lower()
+    agg_match     = (exp.aggregation or "").lower() == (act.aggregation or "").lower()
+    attr_match    = (exp.attribute or "").lower() == (act.attribute or "").lower()
+    win_match     = (exp.window or "").lower() == (act.window or "").lower()
+    filters_match = _compare_filter_clauses(exp.filters, act.filters)
 
     if not name_match:
         notes.append(f"name: expected={exp.name!r} got={act.name!r}")
@@ -153,14 +188,14 @@ def _compare_da(idx: int, exp: DerivedAttr, act: DerivedAttr) -> DAComparison:
         notes.append(f"attribute: expected={exp.attribute!r} got={act.attribute!r}")
     if not win_match:
         notes.append(f"window: expected={exp.window!r} got={act.window!r}")
-    if not filter_match:
+    if not filters_match:
         notes.append(
-            f"filter: expected=({exp.filter_attribute} {exp.filter_operator} {exp.filter_value})"
-            f" got=({act.filter_attribute} {act.filter_operator} {act.filter_value})"
+            f"filters: expected={[(fc.attribute, fc.operator, fc.value) for fc in (exp.filters or [])]}"
+            f" got={[(fc.attribute, fc.operator, fc.value) for fc in (act.filters or [])]}"
         )
 
-    fields = [name_match, agg_match, attr_match, win_match, filter_match]
-    return DAComparison(idx, name_match, agg_match, attr_match, win_match, filter_match,
+    fields = [name_match, agg_match, attr_match, win_match, filters_match]
+    return DAComparison(idx, name_match, agg_match, attr_match, win_match, filters_match,
                         score=round(sum(fields) / len(fields), 3), notes=notes)
 
 
@@ -176,13 +211,15 @@ class ConditionComparison:
 
 
 # Field groups with weights used in scoring
-_CORE_FIELDS   = ["attribute", "operator", "value", "aggregation", "window", "logical_connector"]
-_FILTER_FIELDS = ["filter_attribute", "filter_operator", "filter_value"]
-_DERIVED_FIELDS = ["derived_expression", "window_mode", "derived_attribute_count"]
+_CORE_FIELDS     = ["attribute", "operator", "value", "aggregation", "window", "logical_connector"]
+_FILTER_FIELDS   = ["filters_match"]        # compound bool; weight 4.5 = equiv to old 3 × 1.5
+_DERIVED_FIELDS  = ["derived_expression", "window_mode", "derived_attribute_count"]
+_GROUPING_FIELDS = ["group_by", "group_mode", "link_attribute", "condition_group", "condition_group_connector"]
 
 _WEIGHTS = {f: 2.0 for f in _CORE_FIELDS}
-_WEIGHTS.update({f: 1.5 for f in _FILTER_FIELDS})
+_WEIGHTS.update({"filters_match": 4.5})
 _WEIGHTS.update({f: 2.0 for f in _DERIVED_FIELDS})
+_WEIGHTS.update({f: 1.5 for f in _GROUPING_FIELDS})
 _DA_WEIGHT = 2.0
 
 
@@ -200,10 +237,8 @@ def _compare_condition(idx: int, exp: RuleCondition, act: RuleCondition) -> Cond
         (exp.logical_connector or "AND").upper() == (act.logical_connector or "AND").upper()
     )
 
-    # Filter fields
-    results["filter_attribute"]   = (exp.filter_attribute or "").lower() == (act.filter_attribute or "").lower()
-    results["filter_operator"]    = (exp.filter_operator or "") == (act.filter_operator or "")
-    results["filter_value"]       = _vals_equal(exp.filter_value, act.filter_value)
+    # Filter fields (compound comparison)
+    results["filters_match"] = _compare_filter_clauses(exp.filters, act.filters)
 
     # Derived expression fields
     results["derived_expression"] = (exp.derived_expression or "").lower() == (act.derived_expression or "").lower()
@@ -213,11 +248,30 @@ def _compare_condition(idx: int, exp: RuleCondition, act: RuleCondition) -> Cond
     act_das = act.derived_attributes or []
     results["derived_attribute_count"] = len(exp_das) == len(act_das)
 
+    # Grouping fields
+    results["group_by"]   = (exp.group_by or "").lower() == (act.group_by or "").lower()
+    results["group_mode"] = (exp.group_mode or "any").lower() == (act.group_mode or "any").lower()
+    results["link_attribute"] = _vals_equal(exp.link_attribute, act.link_attribute)
+    results["condition_group"] = (exp.condition_group or 0) == (act.condition_group or 0)
+    results["condition_group_connector"] = (
+        (exp.condition_group_connector or "OR").upper() == (act.condition_group_connector or "OR").upper()
+    )
+
     # Record mismatches
+    _special = {
+        "derived_attribute_count": (len(exp_das), len(act_das)),
+        "filters_match": (
+            [(fc.attribute, fc.operator, fc.value) for fc in (exp.filters or [])],
+            [(fc.attribute, fc.operator, fc.value) for fc in (act.filters or [])],
+        ),
+    }
     for fname, matched in results.items():
         if not matched:
-            exp_val = getattr(exp, fname, None) if fname != "derived_attribute_count" else len(exp_das)
-            act_val = getattr(act, fname, None) if fname != "derived_attribute_count" else len(act_das)
+            if fname in _special:
+                exp_val, act_val = _special[fname]
+            else:
+                exp_val = getattr(exp, fname, None)
+                act_val = getattr(act, fname, None)
             notes.append(f"{fname}: expected={exp_val!r}  got={act_val!r}")
 
     # Compare DerivedAttrs positionally
@@ -235,7 +289,7 @@ def _compare_condition(idx: int, exp: RuleCondition, act: RuleCondition) -> Cond
                                                ["unexpected in actual"]))
 
     # Weighted score across all fields
-    all_fields = _CORE_FIELDS + _FILTER_FIELDS + _DERIVED_FIELDS
+    all_fields = _CORE_FIELDS + _FILTER_FIELDS + _DERIVED_FIELDS + _GROUPING_FIELDS
     earned = sum(_WEIGHTS[f] * results[f] for f in all_fields)
     total  = sum(_WEIGHTS[f] for f in all_fields)
 
@@ -380,9 +434,10 @@ def print_report(comparisons: list[RuleComparison]) -> None:
 
             if c.field_results:
                 groups = [
-                    ("core   ", _CORE_FIELDS),
-                    ("filter ", _FILTER_FIELDS),
-                    ("derived", _DERIVED_FIELDS),
+                    ("core    ", _CORE_FIELDS),
+                    ("filter  ", _FILTER_FIELDS),
+                    ("derived ", _DERIVED_FIELDS),
+                    ("grouping", _GROUPING_FIELDS),
                 ]
                 for gname, gfields in groups:
                     relevant = {f: c.field_results[f] for f in gfields if f in c.field_results}
@@ -425,7 +480,7 @@ def _to_dict(cmp: RuleComparison) -> dict:
             "aggregation_match": d.aggregation_match,
             "attribute_match": d.attribute_match,
             "window_match": d.window_match,
-            "filter_match": d.filter_match,
+            "filters_match": d.filters_match,
             "score": d.score,
             "notes": d.notes,
         }

@@ -111,7 +111,7 @@ def _render_generated_cases_content(rule: Rule):
                     for t in sorted(group, key=lambda t: t.attributes.get("created_at") or ""):
                         row = {"id": t.id, "tag": t.tag}
                         for col in display_attrs:
-                            row[col] = t.attributes.get(col, "")
+                            row[col] = t.id if col == "transaction_id" else t.attributes.get(col, "")
                         if t.validation_result:
                             row["validation"] = "PASS" if t.validation_result.passed else "FAIL"
                         rows.append(row)
