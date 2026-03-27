@@ -7,8 +7,8 @@ import streamlit as st
 
 from domain.models import FilterClause, Rule, RuleCondition
 from llm.rule_parser import parse_rule
-from llm.suggestion_generator import generate_suggestions
 from ui.state import go_to
+import ui.suggestion_loader as suggestion_loader
 
 
 def render():
@@ -30,7 +30,8 @@ def render():
                 st.session_state.genuine_proto = None
                 st.session_state.stateless_sequence = None
                 st.session_state.behavioral_cases = []
-                # Clear suggestion cache so new suggestions are generated for this rule
+                # Clear any previously loaded suggestions for this session
+                suggestion_loader.clear()
                 st.session_state.suggestions = None
                 st.session_state.prefill_scenario_type = None
                 st.session_state.prefill_intent = None
@@ -416,11 +417,10 @@ def render():
 
     st.divider()
     if st.button("Confirm and Continue", type="primary"):
-        with st.spinner("Analysing rule for edge case suggestions..."):
-            try:
-                st.session_state.suggestions = generate_suggestions(rule)
-            except Exception:
-                st.session_state.suggestions = []
+        st.session_state.suggestions = None
+        suggestion_loader.clear()
+        suggestion_loader.start(rule)   # fire-and-forget background thread
+
         if rule.rule_type == "stateless":
             go_to("prototype_review")
         else:

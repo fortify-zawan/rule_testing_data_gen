@@ -1,6 +1,7 @@
 """Thin wrapper around the Anthropic SDK."""
 import json
 import os
+import threading
 import time
 
 import anthropic
@@ -11,29 +12,37 @@ log = get_logger(__name__)
 
 _client = None
 
+# Thread-local flag: set to True inside background (non-Streamlit) threads to
+# prevent any Streamlit API calls that would trigger phantom session reruns.
+_thread_local = threading.local()
+
 
 def _get_client() -> anthropic.Anthropic:
     """Return an Anthropic client, using the session-state key if available."""
     global _client
 
-    # Try to read the key from Streamlit session state first
-    api_key = None
-    try:
-        import streamlit as st
+    # Skip all Streamlit calls when running in a background thread.
+    # Python copies contextvars to child threads, so get_script_run_ctx() cannot
+    # reliably distinguish background threads; _thread_local.is_background is set
+    # explicitly and is never inherited.
+    is_background = getattr(_thread_local, "is_background", False)
 
-        api_key = st.session_state.get("api_key", "").strip() or None
-    except Exception:
-        pass
+    api_key = None
+    if not is_background:
+        try:
+            import streamlit as st
+            api_key = st.session_state.get("api_key", "").strip() or None
+        except Exception:
+            pass
 
     # Fall back to the environment variable
     if not api_key:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
 
-    # Fall back to Streamlit secrets
-    if not api_key:
+    # Fall back to Streamlit secrets (main thread only)
+    if not api_key and not is_background:
         try:
             import streamlit as st
-
             api_key = st.secrets.get("ANTHROPIC_API_KEY", "").strip() or None
         except Exception:
             pass

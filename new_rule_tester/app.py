@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import streamlit as st
 
 from ui.pages import prototype_review, rule_input, test_case_builder, test_suite
-from ui.state import init_state
+from ui.state import init_state, reset_state
 
 st.set_page_config(
     page_title="AML Rule Tester",
@@ -33,6 +33,9 @@ STEPS = {
 
 with st.sidebar:
     st.markdown("## AML Rule Tester")
+    if st.button("+ New Rule", use_container_width=True):
+        reset_state()
+        st.rerun()
     st.markdown("---")
     current_step = st.session_state.step
     for key, label in STEPS.items():

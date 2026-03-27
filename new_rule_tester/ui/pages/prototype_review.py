@@ -15,6 +15,7 @@ from llm.prototype_generator import generate_prototypes, generate_single_prototy
 from llm.suggestion_generator import generate_suggestions
 from orchestration.stateless_orchestrator import run_single
 from ui.state import clear_status_log, go_to, log_status
+import ui.suggestion_loader as suggestion_loader
 
 # ── Shared badges ──────────────────────────────────────────────────────────────
 
@@ -49,9 +50,25 @@ def _auto_generate_suggestions(rule: Rule):
 
 def _render_suggestions_content(rule: Rule):
     suggestions: list[TestSuggestion] | None = st.session_state.get("suggestions")
+
+    # Pick up results from the background thread if they have arrived
     if suggestions is None:
-        _auto_generate_suggestions(rule)
-        suggestions = st.session_state.get("suggestions", [])
+        bg = suggestion_loader.poll()
+        if isinstance(bg, list):
+            suggestions = bg
+            st.session_state.suggestions = suggestions
+        elif bg == "loading":
+            st.caption("⏳ Suggestions loading in background…")
+            if st.button("↻ Check", key="refresh_suggestions", use_container_width=True):
+                st.rerun()
+            return
+        else:
+            # Thread not started — fall back to manual generation
+            st.caption("Generate edge-case suggestions for this rule.")
+            if st.button("Generate Suggestions", key="gen_suggestions", use_container_width=True):
+                _auto_generate_suggestions(rule)
+                st.rerun()
+            return
 
     st.caption("Auto-generated edge cases for this rule.")
 
@@ -60,13 +77,15 @@ def _render_suggestions_content(rule: Rule):
         return
 
     for s in suggestions:
+        title = s.title if len(s.title) <= 60 else s.title[:57] + "..."
+        desc = s.description if len(s.description) <= 180 else s.description[:177] + "..."
         with st.container(border=True):
             scenario_badge = _SCENARIO_BADGE.get(s.scenario_type, s.scenario_type)
             outcome_badge = _OUTCOME_BADGE.get(s.expected_outcome, s.expected_outcome)
             pattern_label = _PATTERN_LABEL.get(s.pattern_type, s.pattern_type)
-            st.markdown(f"{scenario_badge} &nbsp; {outcome_badge}  \n**{s.title}**")
+            st.markdown(f"{scenario_badge} &nbsp; {outcome_badge}  \n**{title}**")
             st.caption(f"*{pattern_label}*")
-            st.caption(s.description)
+            st.caption(desc)
             if s.focus_conditions:
                 st.caption("Focus: " + " · ".join(s.focus_conditions))
             if st.button("Use this suggestion", key=f"use_proto_{s.id}", use_container_width=True):

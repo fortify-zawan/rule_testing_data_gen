@@ -32,6 +32,34 @@ def init_state():
             st.session_state[key] = value
 
 
+def reset_state():
+    """Reset all session state to defaults (start a new rule)."""
+    defaults = {
+        "step": "rule_input",
+        "rule": None,
+        "risky_proto": None,
+        "genuine_proto": None,
+        "risky_proto_approved": False,
+        "genuine_proto_approved": False,
+        "risky_cases": None,
+        "genuine_cases": None,
+        "risky_case_groups": [],
+        "genuine_case_groups": [],
+        "stateless_sequence": None,
+        "behavioral_cases": [],
+        "current_case": None,
+        "status_log": [],
+        "suggestions": None,
+        "prefill_scenario_type": None,
+        "prefill_intent": None,
+        "prefill_expected_outcome": None,
+        "prefill_proto_scenario_type": None,
+        "prefill_proto_intent": None,
+    }
+    for key, value in defaults.items():
+        st.session_state[key] = value
+
+
 def go_to(step: str):
     st.session_state.step = step
 

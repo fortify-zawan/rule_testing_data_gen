@@ -10,6 +10,9 @@ intents for boundary, near-miss, window-edge, and other edge-case scenarios.
 Feedback History: all prior feedback strings are accumulated on the test case and
 passed to every regeneration so earlier instructions are never forgotten.
 """
+import dataclasses
+import json
+
 import streamlit as st
 
 from domain.models import BehavioralTestCase, Rule, TestSuggestion
@@ -17,6 +20,7 @@ from export.exporter import export_csv, export_json, export_xlsx
 from llm.suggestion_generator import generate_suggestions
 from orchestration.behavioral_orchestrator import run as run_behavioral
 from ui.state import clear_status_log, go_to, log_status
+import ui.suggestion_loader as suggestion_loader
 
 # ── Suggestion panel helpers ──────────────────────────────────────────────────
 
@@ -55,9 +59,25 @@ def _auto_generate_suggestions(rule: Rule):
 def _render_suggestions_content(rule: Rule):
     """Inner content for the suggestions expander."""
     suggestions: list[TestSuggestion] | None = st.session_state.get("suggestions")
+
+    # Pick up results from the background thread if they have arrived
     if suggestions is None:
-        _auto_generate_suggestions(rule)
-        suggestions = st.session_state.get("suggestions", [])
+        bg = suggestion_loader.poll()
+        if isinstance(bg, list):
+            suggestions = bg
+            st.session_state.suggestions = suggestions
+        elif bg == "loading":
+            st.caption("⏳ Suggestions loading in background…")
+            if st.button("↻ Check", key="refresh_suggestions", use_container_width=True):
+                st.rerun()
+            return
+        else:
+            # Thread not started — fall back to manual generation
+            st.caption("Generate edge-case suggestions for this rule.")
+            if st.button("Generate Suggestions", key="gen_suggestions", use_container_width=True):
+                _auto_generate_suggestions(rule)
+                st.rerun()
+            return
 
     st.caption("Auto-generated edge cases for this rule. Click **Use** to pre-fill the form.")
 
@@ -70,13 +90,15 @@ def _render_suggestions_content(rule: Rule):
         scenario_badge = _SCENARIO_BADGE.get(s.scenario_type, s.scenario_type)
         outcome_badge = _OUTCOME_BADGE.get(s.expected_outcome, s.expected_outcome)
 
+        title = s.title if len(s.title) <= 60 else s.title[:57] + "..."
+        desc = s.description if len(s.description) <= 180 else s.description[:177] + "..."
         with st.container(border=True):
             st.markdown(
                 f"{scenario_badge} &nbsp; {outcome_badge}  \n"
-                f"**{s.title}**"
+                f"**{title}**"
             )
             st.caption(f"*{pattern_label}*")
-            st.caption(s.description)
+            st.caption(desc)
             if s.focus_conditions:
                 st.caption("Focus: " + " · ".join(s.focus_conditions))
             if st.button("Use this suggestion", key=f"use_{s.id}", use_container_width=True):
@@ -192,6 +214,225 @@ def _render_feedback_history(case: BehavioralTestCase):
                     st.rerun()
 
 
+# ── Feedback report ────────────────────────────────────────────────────────────
+
+def _build_feedback_report(rule: Rule, current_case: BehavioralTestCase | None) -> str:
+    """Build a markdown debug/feedback report for the current session state."""
+    rule_dict = json.loads(json.dumps(dataclasses.asdict(rule), default=str))
+
+    lines: list[str] = []
+
+    lines += [
+        "# AML Rule Tester — Feedback Report",
+        "",
+        "---",
+        "",
+    ]
+
+    # ── Section 1: Rule summary ──────────────────────────────────────────────
+    lines += [
+        "## 1. Rule",
+        "",
+        f"**Expression:** {rule.raw_expression}",
+        f"**Type:** `{rule.rule_type}`",
+        f"**Description:** {rule.description}",
+    ]
+    if rule.relevant_attributes:
+        lines.append(f"**Relevant Attributes:** `{', '.join(rule.relevant_attributes)}`")
+    if rule.high_risk_countries:
+        lines.append(f"**High-Risk Countries:** {', '.join(rule.high_risk_countries)}")
+    lines += ["", "---", ""]
+
+    # ── Section 2: Computed Attributes ──────────────────────────────────────
+    lines.append("## 2. Computed Attributes")
+    lines.append("")
+    if rule.computed_attrs:
+        for ca in rule.computed_attrs:
+            lines.append(f"### `{ca.name}`")
+            lines.append(f"- **Aggregation:** `{ca.aggregation}({ca.attribute})`")
+            if ca.window:
+                lines.append(f"- **Window:** `{ca.window}`")
+            if ca.window_exclude:
+                lines.append(f"- **Window Exclude (prior period):** `{ca.window_exclude}`")
+            if ca.group_by:
+                lines.append(f"- **Group By:** `{ca.group_by}`")
+            if ca.derived_from:
+                lines.append(f"- **Derived From:** `{', '.join(ca.derived_from)}`")
+            if ca.filters:
+                parts = []
+                for k, fc in enumerate(ca.filters):
+                    clause = (
+                        f"`{fc.attribute} {fc.operator} field({fc.value_field})`"
+                        if fc.value_field
+                        else f"`{fc.attribute} {fc.operator} {fc.value}`"
+                    )
+                    if k < len(ca.filters) - 1:
+                        clause += f" **{fc.connector}**"
+                    parts.append(clause)
+                lines.append(f"- **Filters:** {' '.join(parts)}")
+            lines.append("")
+    else:
+        lines += ["*(No computed attributes)*", ""]
+    lines += ["---", ""]
+
+    # ── Section 3: Conditions ────────────────────────────────────────────────
+    lines.append("## 3. Conditions")
+    lines.append("")
+    for i, cond in enumerate(rule.conditions):
+        attr = cond.computed_attr_name or cond.attribute or ""
+        lines.append(f"### Condition {i + 1}: `{attr} {cond.operator} {cond.value}`")
+        if cond.aggregation:
+            lines.append(f"- **Aggregation:** `{cond.aggregation}`")
+        if cond.window:
+            lines.append(f"- **Window:** `{cond.window}`")
+        if cond.filters:
+            parts = []
+            for k, fc in enumerate(cond.filters):
+                clause = (
+                    f"`{fc.attribute} {fc.operator} field({fc.value_field})`"
+                    if fc.value_field
+                    else f"`{fc.attribute} {fc.operator} {fc.value}`"
+                )
+                if k < len(cond.filters) - 1:
+                    clause += f" **{fc.connector}**"
+                parts.append(clause)
+            lines.append(f"- **Filters:** {' '.join(parts)}")
+        if cond.group_by:
+            lines.append(f"- **Group By:** `{cond.group_by}` (mode: `{cond.group_mode}`)")
+        if cond.condition_group:
+            lines.append(f"- **Condition Group:** {cond.condition_group} (connector: `{cond.condition_group_connector}`)")
+        if i < len(rule.conditions) - 1:
+            lines.append(f"- **Connector to next:** `{cond.logical_connector}`")
+        lines.append("")
+    lines += ["---", ""]
+
+    # ── Section 4: Full Rule JSON ────────────────────────────────────────────
+    lines += [
+        "## 4. Full Rule JSON",
+        "",
+        "```json",
+        json.dumps(rule_dict, indent=2),
+        "```",
+        "",
+        "---",
+        "",
+    ]
+
+    # ── Section 5: Current Test Case ─────────────────────────────────────────
+    lines.append("## 5. Current Test Case")
+    lines.append("")
+    if current_case is None:
+        lines += ["*(No active test case — generate one first)*", "", "---", ""]
+    else:
+        vr = current_case.validation_result
+        expected = "FIRE" if (vr and vr.expected_trigger) else "NOT FIRE"
+        lines += [
+            f"| Field | Value |",
+            f"|---|---|",
+            f"| **Case ID** | `{current_case.id}` |",
+            f"| **Scenario** | `{current_case.scenario_type}` |",
+            f"| **Expected Outcome** | **{expected}** |",
+        ]
+        if current_case.intent:
+            lines.append(f"| **Intent** | {current_case.intent} |")
+        lines += [
+            f"| **Correction Attempts** | {current_case.correction_attempts} |",
+            f"| **Transactions** | {len(current_case.transactions)} |",
+            "",
+        ]
+        if current_case.user_feedback_history:
+            lines.append("### Feedback History")
+            for j, fb in enumerate(current_case.user_feedback_history, 1):
+                lines.append(f"{j}. {fb}")
+            lines.append("")
+        lines += ["---", ""]
+
+        # ── Section 6: Validation Result ──────────────────────────────────
+        lines.append("## 6. Validation Result")
+        lines.append("")
+        if vr is None:
+            lines += ["*(No validation result)*", "", "---", ""]
+        else:
+            overall = "✅ PASS" if vr.passed else "❌ FAIL"
+            lines += [
+                f"**Overall:** {overall}",
+                f"**Expected trigger:** {'Yes (FIRE)' if vr.expected_trigger else 'No (NOT FIRE)'}",
+                "",
+            ]
+
+            if current_case.computed_aggregates:
+                lines += ["### Computed Aggregates", "", "| Aggregate | Value |", "|---|---|"]
+                for agg_key, agg_val in current_case.computed_aggregates.items():
+                    try:
+                        fmt = f"{agg_val:.4f}" if isinstance(agg_val, float) else str(agg_val)
+                    except Exception:
+                        fmt = str(agg_val)
+                    lines.append(f"| `{agg_key}` | `{fmt}` |")
+                lines.append("")
+
+            lines += ["### Per-Condition Results", "", "| Condition | Threshold | Actual Value | Status |", "|---|---|---|---|"]
+            for cr in vr.condition_results:
+                status = "✅ PASS" if cr.passed else "❌ FAIL"
+                try:
+                    actual = f"{cr.actual_value:.4f}" if isinstance(cr.actual_value, float) else str(cr.actual_value)
+                except Exception:
+                    actual = str(cr.actual_value)
+                lines.append(f"| `{cr.attribute} {cr.operator}` | `{cr.threshold}` | `{actual}` | {status} |")
+            lines.append("")
+
+            if not vr.passed:
+                if vr.expected_trigger:
+                    # Risky case that did NOT fire — show which conditions fell short
+                    shortfall = [cr for cr in vr.condition_results if not cr.passed]
+                    lines += [
+                        "### ⚠ Conditions That Prevented Firing (RISKY — expected FIRE)",
+                        "",
+                        "These conditions did not reach their threshold:",
+                        "",
+                    ]
+                    for cr in shortfall:
+                        try:
+                            actual = f"{cr.actual_value:.4f}" if isinstance(cr.actual_value, float) else str(cr.actual_value)
+                        except Exception:
+                            actual = str(cr.actual_value)
+                        lines.append(f"- ❌ `{cr.attribute} {cr.operator} {cr.threshold}` → actual: `{actual}`")
+                else:
+                    # Genuine case that incorrectly fired — show which conditions passed (triggered the rule)
+                    triggered = [cr for cr in vr.condition_results if cr.passed]
+                    lines += [
+                        "### ⚠ Conditions That Caused Unexpected Trigger (GENUINE — expected NOT FIRE)",
+                        "",
+                        "These conditions evaluated to True and caused the rule to fire when it should not have:",
+                        "",
+                    ]
+                    for cr in triggered:
+                        try:
+                            actual = f"{cr.actual_value:.4f}" if isinstance(cr.actual_value, float) else str(cr.actual_value)
+                        except Exception:
+                            actual = str(cr.actual_value)
+                        lines.append(f"- ✅ `{cr.attribute} {cr.operator} {cr.threshold}` → actual: `{actual}`")
+                lines.append("")
+            lines += ["---", ""]
+
+            # ── Section 7: Transactions ────────────────────────────────────
+            lines.append("## 7. Transactions")
+            lines.append("")
+            if not current_case.transactions:
+                lines += ["*(No transactions)*", ""]
+            else:
+                fixed = ["created_at", "send_amount", "currency"]
+                extra = [a for a in rule.relevant_attributes if a not in fixed]
+                cols = ["tag"] + fixed + extra
+                lines.append("| # | " + " | ".join(cols) + " |")
+                lines.append("|---|" + "|".join(["---"] * len(cols)) + "|")
+                for idx, t in enumerate(
+                    sorted(current_case.transactions, key=lambda tx: tx.attributes.get("created_at") or ""), 1
+                ):
+                    vals = [t.tag] + [str(t.attributes.get(c, "")) for c in fixed + extra]
+                    lines.append(f"| {idx} | " + " | ".join(vals) + " |")
+                lines.append("")
+
+    return "\n".join(lines)
 
 # ── Main render ───────────────────────────────────────────────────────────────
 
@@ -206,9 +447,22 @@ def render():
     st.subheader("Step 2 — Test Case Builder")
     st.info(f"**Rule:** {rule.raw_expression}")
 
-    if st.button("← Back to Rule Input"):
-        go_to("rule_input")
-        st.rerun()
+    current_case: BehavioralTestCase = st.session_state.get("current_case")
+
+    col_back, col_report = st.columns([1, 1])
+    with col_back:
+        if st.button("← Back to Rule Input"):
+            go_to("rule_input")
+            st.rerun()
+    with col_report:
+        st.download_button(
+            "Share Feedback",
+            data=_build_feedback_report(rule, current_case),
+            file_name="aml_feedback_report.md",
+            mime="text/markdown",
+            use_container_width=True,
+            key="share_feedback_btn",
+        )
 
     st.divider()
 
@@ -219,9 +473,6 @@ def render():
         _render_right_panel(rule)
 
     with main_col:
-
-        current_case: BehavioralTestCase = st.session_state.get("current_case")
-
         # ── Form to create a new test case ────────────────────────────────────
         if current_case is None:
             st.subheader(f"New Test Case #{len(cases) + 1}")
@@ -315,7 +566,7 @@ def render():
             rows.append(row)
 
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.table(df)
 
         # Computed aggregates + validation
         st.markdown("**Computed Aggregates & Validation**")
